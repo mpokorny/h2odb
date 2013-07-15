@@ -1,7 +1,7 @@
 H2Odb
 =====
 
-A simple program for loading water analysis records into a database.
+A simple program for loading water analysis records into a database. Probably useful only to the hydrogeology group at the New Mexico Bureau of Geology, at best.
 
 Installation
 ------------

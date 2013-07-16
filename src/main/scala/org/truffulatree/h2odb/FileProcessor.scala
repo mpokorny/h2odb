@@ -9,7 +9,7 @@ package org.truffulatree.h2odb
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import au.com.bytecode.opencsv.CSVReader
-import com.healthmarketscience.jackcess.{Database, Column}
+import com.healthmarketscience.jackcess.{Database, Table}
 import org.apache.logging.log4j.LogManager
 
 object DBFiller {
@@ -26,9 +26,14 @@ object DBFiller {
     }
     validateParams(records) foreach (throw _)
     validateSamplePointIDs(records, db) foreach (throw _)
-    val newRecords = records map convertCSVRecord
-    newRecords foreach { rec => logger.debug(rec) }
-    addRows(db, newRecords)
+    validateTests(records) foreach (throw _)
+    val major = db.getTable(Tables.major)
+    val minor = db.getTable(Tables.minor)
+    val convertedRecords = records map (r => convertCSVRecord(major, minor, r))
+    val newRecords = removeLowPriorityRecords(convertedRecords)
+    if (logger.isDebugEnabled)
+      newRecords foreach { rec => logger.debug(rec - "Table") }
+    addRows(newRecords)
     db.flush()
     println(s"Added ${newRecords.length} rows to database")
   }
@@ -36,8 +41,7 @@ object DBFiller {
   def validateHeaderFields(header: Seq[String]): Option[Exception] = {
     if (!header.contains(samplePointID))
       Some(new InvalidInputHeader(s"CSV file is missing '$samplePointID' column"))
-    else
-      None
+    else None
   }
 
   def validateParams(records: Seq[Map[String, String]]): Option[Exception] = {
@@ -51,8 +55,7 @@ object DBFiller {
         ("""|The following 'Param' values in the spreadsheet have no known
             | conversion to an analyte code:
             | """ + missing).stripMargin))
-    else
-      None
+    else None
   }
 
   def validateSamplePointIDs(records: Seq[Map[String, String]], db: Database):
@@ -67,10 +70,8 @@ object DBFiller {
       case (missing, rec) => {
         rec(samplePointID) match {
           case pt: String => {
-            if (!knownPoints.contains(pt))
-              missing + pt
-            else
-              missing
+            if (!knownPoints.contains(pt)) missing + pt
+            else missing
           }
         }
       }
@@ -79,12 +80,27 @@ object DBFiller {
       Some(
         new MissingSamplePointID(
           s"The following sample point IDs are not in the '$chemistrySample' table: ${missing.mkString(",")}"))
-    }
-    else
-      None
+    } else None
   }
 
-  def convertCSVRecord(record: Map[String,String]): Map[String,Any] = {
+  def validateTests(records: Seq[Map[String,String]]): Option[Exception] = {
+    def validTest(rec: Map[String,String]) = {
+      val param = rec("Param")
+      !Tables.testPriority.contains(param) ||
+      Tables.testPriority(param).contains(rec("Test"))
+    }
+    val invalidTests = records filter (!validTest(_))
+    if (invalidTests.length > 0) {
+      val invalid = invalidTests map (
+        r => (r("SamplePointID"),r("Param"),r("Test")))
+      Some(
+        new InvalidTestDescription(
+          s"Invalid test descriptions for ${invalid.mkString(", ")}"))
+    } else None
+  }
+
+  def convertCSVRecord(major: Table, minor: Table, record: Map[String,String]):
+      Map[String,Any] = {
     val result: mutable.Map[String,Any] = mutable.Map()
     record foreach {
       case ("ReportedND", "ND") => {
@@ -101,6 +117,15 @@ object DBFiller {
         result("Analyte") = Tables.analytes(p)
         if (Tables.method.contains(p))
           result("AnalysisMethod") = Tables.method(p)
+        result("Table") = Tables.chemistryTable(p) match {
+          case Tables.major => major
+          case Tables.minor => minor
+        }
+        result("Priority") =
+          if (Tables.testPriority.contains(p))
+            Tables.testPriority(p).indexOf(record("Test"))
+          else
+            0
       }
       case ("Results_Units", u) =>
         result("Units") = Tables.units.getOrElse(record("Param"), u)
@@ -109,13 +134,30 @@ object DBFiller {
     result.toMap
   }
 
-  def addRows(db: Database, records: Seq[Map[String,Any]]) {
-    val table = db.getTable("MajorChemistry")
-    val colNames = table.getColumns.map(_.getName)
+  def removeLowPriorityRecords(records: Seq[Map[String,Any]]):
+      Seq[Map[String,Any]] =
+    ((Map.empty[(String,String),Map[String,Any]] /: records) {
+      case (newrecs, rec) => {
+        val key = (rec("SamplePoint_ID").asInstanceOf[String],
+          rec("Analyte").asInstanceOf[String])
+        if (!newrecs.contains(key) ||
+          (rec("Priority").asInstanceOf[Int] <
+            newrecs(key)("Priority").asInstanceOf[Int]))
+          newrecs + ((key, rec))
+        else newrecs
+      }
+    }).values.toSeq
+
+  def addRows(records: Seq[Map[String,Any]]) {
+    val tables =
+      Set((records map (_.apply("Table").asInstanceOf[Table])):_*)
+    val colNames = Map(
+      (tables.toSeq map { tab => (tab, tab.getColumns.map(_.getName)) }):_*)
     records foreach { rec =>
-      val row = colNames map { col =>
+      val table = rec("Table").asInstanceOf[Table]
+      val row = colNames(table) map { col =>
         rec.getOrElse(col, null).asInstanceOf[Object] }
-      logger.debug(row)
+      if (logger.isDebugEnabled) logger.debug(s"$row -> ${table.getName})")
       table.addRow(row:_*)
     }
   }

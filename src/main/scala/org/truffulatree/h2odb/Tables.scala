@@ -124,6 +124,66 @@ object Tables {
     hardness    -> "mg/L",
     percentDiff -> "%Diff",
     pH          -> "pH",
-    conductance -> "µS/cm"
+    conductance -> "µS/cm")
+
+  val major = "MajorChemistry"
+
+  val minor = "MinorandTraceChemistry"
+
+  val chemistryTable = Map(
+    alkalinity     -> major,
+    aluminum       -> minor,
+    anions         -> major,
+    antimony       -> minor,
+    arsenic        -> minor,
+    barium         -> minor,
+    beryllium      -> minor,
+    bicarbonate    -> major,
+    boron          -> minor,
+    bromide        -> minor,
+    cadmium        -> minor,
+    calcium        -> major,
+    carbonate      -> major,
+    cations        -> major,
+    chloride       -> major,
+    chromium       -> minor,
+    cobalt         -> minor,
+    copper         -> minor,
+    fluoride       -> minor,
+    hardness       -> major,
+    iron           -> minor,
+    lead           -> minor,
+    lithium        -> minor,
+    magnesium      -> major,
+    manganese      -> minor,
+    molybdenum     -> minor,
+    nickel         -> minor,
+    nitrate        -> minor,
+    nitrite        -> minor,
+    phosphate      -> minor,
+    percentDiff    -> major,
+    potassium      -> major,
+    selenium       -> minor,
+    siliconDioxide -> minor,
+    silicon        -> minor,
+    silver         -> minor,
+    sodium         -> major,
+    conductance    -> major,
+    strontium      -> minor,
+    sulfate        -> major,
+    tds            -> major,
+    thallium       -> minor,
+    thorium        -> minor,
+    tin            -> minor,
+    titanium       -> minor,
+    uranium        -> minor,
+    vanadium       -> minor,
+    zinc           -> minor,
+    pH             -> major)
+
+  val testPriority = Map(
+    // The order of list elements is from most preferred to least preferred
+    strontium   -> List("Trace Metals by ICPMS", "Cations by ICPOES"),
+    bromide     -> List("Low Bromide", "Anions by IC")
   )
 }

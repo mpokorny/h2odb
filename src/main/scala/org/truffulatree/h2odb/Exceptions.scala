@@ -19,3 +19,7 @@ class MissingSamplePointID(message: String)
 class MissingParamConversion(message: String)
     extends Exception(message)
     with H2ODbException
+
+class InvalidTestDescription(message: String)
+    extends Exception(message)
+    with H2ODbException

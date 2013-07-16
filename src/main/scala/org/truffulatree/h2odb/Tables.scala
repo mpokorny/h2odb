@@ -83,7 +83,7 @@ object Tables {
     fluoride       -> "F",
     hardness       -> "HRD",
     iron           -> "Fe",
-    lead           -> "Pd",
+    lead           -> "Pb",
     lithium        -> "Li",
     magnesium      -> "Mg",
     manganese      -> "Mn",

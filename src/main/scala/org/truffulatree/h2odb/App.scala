@@ -10,10 +10,12 @@ import java.io.{File, FileReader}
 import au.com.bytecode.opencsv.CSVReader
 import com.healthmarketscience.jackcess.Database
 
-object Main extends App {
-
+object Main {
   def checkArgs(args: String*): (Option[CSVReader], Option[Database]) = {
-    if (args.length != 2) (None, None)
+    if (args.length != 2) {
+      println("Usage: dbfiller [CSV file] [MDB file]")
+      (None, None)
+    }
     else (
       try {
         Some(new CSVReader(new FileReader(new File(args(0))), ';'))
@@ -33,16 +35,38 @@ object Main extends App {
       })
   }
 
-  checkArgs(args:_*) match {
-    case (Some(csv), Some(db)) => {
-      try {
-        DBFiller(csv, db)
-      } catch {
-        case e: H2ODbException => println(e.getMessage)
-      } finally {
-        db.close()
+  def apply(args: String*): xsbti.MainResult = {
+    checkArgs(args:_*) match {
+      case (Some(csv), Some(db)) => {
+        try {
+          DBFiller(csv, db)
+          new Exit(0)
+        } catch {
+          case e: H2ODbException => {
+            println(e.getMessage)
+            new Exit(1)
+          }
+        } finally {
+          db.close()
+        }
+      }
+      case _ => new Exit(1)
+    }
+  }
+}
+
+class Exit(val code: Int) extends xsbti.Exit
+
+class Run extends xsbti.AppMain {
+  def run(configuration: xsbti.AppConfiguration): xsbti.MainResult = {
+    configuration.provider.scalaProvider.version match {
+      case "2.10.2" => Main(configuration.arguments:_*)
+      case _ => new xsbti.Reboot {
+        def arguments = configuration.arguments
+        def baseDirectory = configuration.baseDirectory
+        def scalaVersion = "2.10.2"
+        def app = configuration.provider.id
       }
     }
-    case _ =>
   }
 }

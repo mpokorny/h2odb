@@ -32,10 +32,20 @@ object DBFiller {
     val convertedRecords = records map (r => convertCSVRecord(major, minor, r))
     val newRecords = removeLowPriorityRecords(convertedRecords)
     if (logger.isDebugEnabled)
-      newRecords foreach { rec => logger.debug(rec - "Table") }
+      newRecords foreach { rec => logger.debug((rec - "Table").toString) }
     addRows(newRecords)
     db.flush()
     println(s"Added ${newRecords.length} rows to database")
+    val poorQuality = newRecords filter (!meetsAllStandards(_))
+    if (poorQuality.length > 0) {
+      if (poorQuality.length > 1)
+        println(s"${poorQuality.length} records fail to meet drinking water standards:")
+      else
+        println("1 record fails to meet drinking water standards:")
+      poorQuality foreach { rec =>
+        println(s"${rec("SamplePoint_ID")} - ${rec("Analyte")} (${rec("SampleValue")} ${rec("Units")})")
+      }
+    } else println("All records meet all drinking water standards")
   }
 
   def validateHeaderFields(header: Seq[String]): Option[Exception] = {
@@ -53,8 +63,8 @@ object DBFiller {
     if (!missing.isEmpty)
       Some(new MissingParamConversion(
         ("""|The following 'Param' values in the spreadsheet have no known
-            | conversion to an analyte code:
-            | """ + missing).stripMargin))
+            |conversion to an analyte code:
+            |""" + missing.mkString(",")).stripMargin))
     else None
   }
 
@@ -79,17 +89,18 @@ object DBFiller {
     if (!missing.isEmpty) {
       Some(
         new MissingSamplePointID(
-          s"The following sample point IDs are not in the '$chemistrySample' table: ${missing.mkString(",")}"))
+          ("""|The following sample point IDs are not in the '$chemistrySample'table:
+              |""" + missing.mkString(",")).stripMargin))
     } else None
   }
 
   def validateTests(records: Seq[Map[String,String]]): Option[Exception] = {
-    def validTest(rec: Map[String,String]) = {
+    def isValidTest(rec: Map[String,String]) = {
       val param = rec("Param")
       !Tables.testPriority.contains(param) ||
       Tables.testPriority(param).contains(rec("Test"))
     }
-    val invalidTests = records filter (!validTest(_))
+    val invalidTests = records filter (!isValidTest(_))
     if (invalidTests.length > 0) {
       val invalid = invalidTests map (
         r => (r("SamplePointID"),r("Param"),r("Test")))
@@ -104,7 +115,7 @@ object DBFiller {
     val result: mutable.Map[String,Any] = mutable.Map()
     record foreach {
       case ("ReportedND", "ND") => {
-        result("SampleValue") = record("LowerLimit")
+        result("SampleValue") = record("LowerLimit").toFloat
         result("Symbol") = "<"
       }
       case ("ReportedND", v) =>
@@ -148,9 +159,18 @@ object DBFiller {
       }
     }).values.toSeq
 
+  def meetsAllStandards(record: Map[String, Any]): Boolean = {
+    (Tables.standards.get(record("Analyte").toString) map {
+      case (lo, hi) => {
+        record("SampleValue") match {
+          case v: Float => lo <= v && v <= hi
+        }
+      }
+    }).getOrElse(true)
+  }
+
   def addRows(records: Seq[Map[String,Any]]) {
-    val tables =
-      Set((records map (_.apply("Table").asInstanceOf[Table])):_*)
+    val tables = Set((records map (_.apply("Table").asInstanceOf[Table])):_*)
     val colNames = Map(
       (tables.toSeq map { tab => (tab, tab.getColumns.map(_.getName)) }):_*)
     records foreach { rec =>

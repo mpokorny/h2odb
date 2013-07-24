@@ -184,6 +184,33 @@ object Tables {
   val testPriority = Map(
     // The order of list elements is from most preferred to least preferred
     strontium   -> List("Trace Metals by ICPMS", "Cations by ICPOES"),
-    bromide     -> List("Low Bromide", "Anions by IC")
-  )
+    bromide     -> List("Low Bromide", "Anions by IC"))
+
+  val standards = Map(
+    analytes(aluminum)       -> ((0.0f, 0.05f)),
+    analytes(antimony)       -> ((0.0f, 0.006f)),
+    analytes(arsenic)        -> ((0.0f, 0.01f)),
+    analytes(barium)         -> ((0.0f, 2.0f)),
+    analytes(beryllium)      -> ((0.0f, 0.004f)),
+    analytes(cadmium)        -> ((0.0f, 0.005f)),
+    analytes(chloride)       -> ((0.0f, 250.0f)),
+    analytes(chromium)       -> ((0.0f, 0.1f)),
+    analytes(copper)         -> ((0.0f, 1.0f)),
+    analytes(fluoride)       -> ((0.0f, 2.0f)),
+    analytes(hardness)       -> ((0.0f, 300.0f)),
+    analytes(iron)           -> ((0.0f, 0.3f)),
+    analytes(lead)           -> ((0.0f, 0.015f)),
+    analytes(manganese)      -> ((0.0f, 0.05f)),
+    analytes(nickel)         -> ((0.0f, 0.1f)),
+    analytes(nitrate)        -> ((0.0f, 45.0f)),
+    analytes(nitrite)        -> ((0.0f, 3.3f)),
+    analytes(selenium)       -> ((0.0f, 0.05f)),
+    analytes(silver)         -> ((0.0f, 0.1f)),
+    analytes(sodium)         -> ((0.0f, 20.0f)),
+    analytes(sulfate)        -> ((0.0f, 250.0f)),
+    analytes(tds)            -> ((0.0f, 500.0f)),
+    analytes(thallium)       -> ((0.0f, 0.002f)),
+    analytes(uranium)        -> ((0.0f, 0.03f)),
+    analytes(zinc)           -> ((0.0f, 5.0f)),
+    analytes(pH)             -> ((6.5f, 8.5f)))
 }

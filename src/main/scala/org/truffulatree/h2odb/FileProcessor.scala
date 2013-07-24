@@ -10,10 +10,10 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import au.com.bytecode.opencsv.CSVReader
 import com.healthmarketscience.jackcess.{Database, Table}
-import org.apache.logging.log4j.LogManager
+import org.slf4j.{Logger, LoggerFactory}
 
 object DBFiller {
-  val logger = LogManager.getLogger(getClass.getName.init)
+  val logger = LoggerFactory.getLogger(getClass.getName.init)
 
   val samplePointID = "SamplePointID"
 

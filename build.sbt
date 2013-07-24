@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.1.1-SNAPSHOT"
+version := "0.2.0-SNAPSHOT"
 
 organization := "org.truffulatree"
 
@@ -19,12 +19,15 @@ libraryDependencies ++= Seq(
   "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
   "net.sf.opencsv" % "opencsv" % "2.0",
   "com.healthmarketscience.jackcess" % "jackcess" % "1.2.13",
-  "org.apache.logging.log4j" % "log4j-api" % "2.0-beta8",
-  "org.apache.logging.log4j" % "log4j-core" % "2.0-beta8")
+  "org.slf4j" % "slf4j-api" % "1.7.5",
+  "ch.qos.logback" % "logback-classic" % "1.0.13",
+  "org.scala-sbt" % "launcher-interface" % "0.12.0" % "provided")
 
 resolvers ++= Seq(
   "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
   "releases"  at "https://oss.sonatype.org/content/repositories/releases")
+
+resolvers <+= sbtResolver
 
 scalacOptions ++= Seq(
   "-deprecation",

@@ -7,6 +7,8 @@
 package org.truffulatree.h2odb
 
 object Tables {
+  /** CSV file "Param" column values
+    */
   private object Params {
     val alkalinity      = "Alkalinity as CaCO3"
     val aluminum        = "Aluminum"
@@ -61,6 +63,8 @@ object Tables {
 
   import Params._
 
+  /** Map from CSV file "Param" values to DB table analyte values
+    */
   val analytes = Map(
     alkalinity     -> "ALK",
     aluminum       -> "Al",
@@ -112,12 +116,16 @@ object Tables {
     zinc           -> "Zn",
     pH             -> "pHL")
 
+  /** Map from CSV "Param" values to DB "AnalysisMethod" values
+    */
   val method = Map(
     alkalinity  -> "as CaCO3",
     bicarbonate -> "Alkalinity as HCO3",
     tds         -> "Calculation",
     hardness    -> "as CaCO3")
 
+  /** Map from CSV "Results_Units" values to DB "Units" values, by "Param"
+    */
   val units = Map(
     anions      -> "epm",
     cations     -> "epm",
@@ -126,10 +134,14 @@ object Tables {
     pH          -> "pH",
     conductance -> "µS/cm")
 
+  /** Name of "major chemistry" DB table */
   val major = "MajorChemistry"
 
+  /** Name of "minor chemistry" DB table */
   val minor = "MinorandTraceChemistry"
 
+  /** Map from CSV "Param" value to associated DB table
+    */
   val chemistryTable = Map(
     alkalinity     -> major,
     aluminum       -> minor,
@@ -181,11 +193,16 @@ object Tables {
     zinc           -> minor,
     pH             -> major)
 
+  /** Map from CSV "Param" values to list of "Test" values, in priority order
+    */
   val testPriority = Map(
     // The order of list elements is from most preferred to least preferred
     strontium   -> List("Trace Metals by ICPMS", "Cations by ICPOES"),
     bromide     -> List("Low Bromide", "Anions by IC"))
 
+  /** Map from DB "Analyte" values to range of acceptable values derived from
+    * drinking water quality standards.
+    */
   val standards = Map(
     analytes(aluminum)       -> ((0.0f, 0.05f)),
     analytes(antimony)       -> ((0.0f, 0.006f)),

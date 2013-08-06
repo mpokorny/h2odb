@@ -6,7 +6,7 @@ A simple program for loading water analysis records into a database. Probably us
 Installation
 ------------
 
-H20db may be built and installed using [sbt](http://www.scala-sbt.org/ "sbt") (tested with v0.12.3).
+H20db may be built and installed using [sbt](http://www.scala-sbt.org/ "sbt") (tested with v0.12.3 and v0.12.4).
 
 Feedback
 --------

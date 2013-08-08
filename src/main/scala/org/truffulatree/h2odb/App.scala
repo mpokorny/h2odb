@@ -18,7 +18,7 @@ object Main {
     }
     else (
       try {
-        Some(new CSVReader(new FileReader(new File(args(0))), ';'))
+        Some(new CSVReader(new FileReader(new File(args(0))), ','))
       } catch {
         case _: Exception => {
           println(s"Failed to open ${args(0)} as an CSV file")

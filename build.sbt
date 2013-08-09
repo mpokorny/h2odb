@@ -8,15 +8,18 @@
 //
 name := "H2Odb"
 
-version := "0.3.0-SNAPSHOT"
+version := "0.3.1-SNAPSHOT"
 
 organization := "org.truffulatree"
+
+licenses := Seq(
+  "Mozilla Public License Version 2.0" -> url("https://mozilla.org/MPL/2.0/"))
+
+homepage := Some(url("https://github.com/mpokorny/h2odb"))
 
 scalaVersion := "2.10.2"
 
 libraryDependencies ++= Seq(
-  "org.specs2" %% "specs2" % "1.14" % "test",
-  "org.scalacheck" %% "scalacheck" % "1.10.0" % "test",
   "net.sf.opencsv" % "opencsv" % "2.0",
   "com.healthmarketscience.jackcess" % "jackcess" % "1.2.13",
   "org.slf4j" % "slf4j-api" % "1.7.5",
@@ -32,6 +35,35 @@ resolvers <+= sbtResolver
 scalacOptions ++= Seq(
   "-deprecation",
   "-unchecked",
-  "-feature",
   "-explaintypes",
   "-Xlint")
+
+publishMavenStyle := true
+
+publishTo <<= version { (v: String) =>
+  val nexus = "https://oss.sonatype.org/"
+  if (v.trim.endsWith("SNAPSHOT"))
+    Some("snapshots" at nexus + "content/repositories/snapshots")
+  else
+    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+}
+
+publishArtifact in Test := false
+
+pomIncludeRepository := { _ => false }
+
+pomExtra := (
+  <scm>
+    <url>git@github.com:mpokorny/h2odb.git</url>
+    <connection>scm:git:git@github.com:mpokorny/h2odb.git</connection>
+  </scm>
+  <developers>
+    <developer>
+      <id>martin</id>
+      <name>Martin Pokorny</name>
+      <email>martin@truffulatree.org</email>
+      <timezone>America/Denver</timezone>
+    </developer>
+  </developers>)
+
+useGpg := true

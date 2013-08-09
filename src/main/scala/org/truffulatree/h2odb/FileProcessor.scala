@@ -15,7 +15,7 @@ import org.slf4j.{Logger, LoggerFactory}
 object DBFiller {
   private val logger = LoggerFactory.getLogger(getClass.getName.init)
 
-  private val samplePointID = "SamplePointID"
+  private val samplePointIdCsv = "SamplePointID"
 
   /** Type of records from CSV format file of water analysis results
     */
@@ -72,11 +72,12 @@ object DBFiller {
     // check for known "Test" field values
     validateTests(records) foreach (throw _)
     // get major chemistry table from database
-    val major = db.getTable(Tables.major)
+    val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database
-    val minor = db.getTable(Tables.minor)
+    val minorChemistry = db.getTable(Tables.DbTableInfo.MinorChemistry.name)
     // convert records to db schema compatible format
-    val convertedRecords = records map (r => convertCSVRecord(major, minor, r))
+    val convertedRecords = records map (
+      r => convertCSVRecord(majorChemistry, minorChemistry, r))
     // filter out records for low priority tests
     val newRecords = removeLowPriorityRecords(convertedRecords)
     if (logger.isDebugEnabled)
@@ -97,8 +98,10 @@ object DBFiller {
     *                None, otherwise
     */
   private def validateHeaderFields(header: Seq[String]): Option[Exception] = {
-    if (!header.contains(samplePointID))
-      Some(new InvalidInputHeader(s"CSV file is missing '$samplePointID' column"))
+    if (!header.contains(samplePointIdCsv))
+      Some(
+        new InvalidInputHeader(
+          s"CSV file is missing '$samplePointIdCsv' column"))
     else None
   }
 
@@ -136,15 +139,16 @@ object DBFiller {
     */
   private def validateSamplePointIDs(records: Seq[CsvRecord], db: Database):
       Option[Exception] = {
-    val chemistrySample = "Chemistry SampleInfo"
     val knownPoints =
-      (Set.empty[String] /: db.getTable(chemistrySample)) {
+      (Set.empty[String] /:
+        db.getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)) {
         case (points, row) =>
-          points + row.get("SamplePoint_ID").toString
+          points + row.get(
+            Tables.DbTableInfo.ChemistrySampleInfo.samplePointId).toString
       }
     val missing = (Set.empty[String] /: records) {
       case (missing, rec) => {
-        rec(samplePointID) match {
+        rec(samplePointIdCsv) match {
           case pt: String => {
             if (!knownPoints.contains(pt)) missing + pt
             else missing
@@ -153,10 +157,10 @@ object DBFiller {
       }
     }
     if (!missing.isEmpty) {
+      val prefix =
+        s"The following sample point IDs are not in the ${Tables.DbTableInfo.ChemistrySampleInfo.name} table: "
       Some(
-        new MissingSamplePointID(
-          ("""|The following sample point IDs are not in the '$chemistrySample'table:
-              |""" + missing.mkString(",")).stripMargin))
+        new MissingSamplePointID((prefix + missing.mkString(",")).stripMargin))
     } else None
   }
 
@@ -227,8 +231,8 @@ object DBFiller {
           result("AnalysisMethod") = Tables.method(p) // as String
         // record table this result goes into (as table reference)
         result("Table") = Tables.chemistryTable(p) match {
-          case Tables.major => major
-          case Tables.minor => minor
+          case Tables.DbTableInfo.MajorChemistry.name => major
+          case Tables.DbTableInfo.MinorChemistry.name => minor
         }
         // set test result priority value (as Int)
         result("Priority") =

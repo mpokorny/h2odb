@@ -7,6 +7,7 @@
 package org.truffulatree.h2odb
 
 object Tables {
+
   /** CSV file "Param" column values
     */
   private object Params {
@@ -116,6 +117,30 @@ object Tables {
     zinc           -> "Zn",
     pH             -> "pHL")
 
+  /** DB tables info
+    */
+  object DbTableInfo {
+
+    /** Single table info
+      * 
+      * Minimum info is the table name
+      */
+    class TableInfo(val name: String)
+
+    /** Name of "chemistry sample info" table */
+    object ChemistrySampleInfo extends TableInfo("Chemistry SampleInfo") {
+      val samplePointId = "SamplePoint_ID"
+    }
+
+    /** Name of "major chemistry" table */
+    object MajorChemistry extends TableInfo("MajorChemistry")
+
+    /** Name of "minor chemistry" table */
+    object MinorChemistry extends TableInfo("MinorandTraceChemistry")
+  }
+
+  import DbTableInfo._
+
   /** Map from CSV "Param" values to DB "AnalysisMethod" values
     */
   val method = Map(
@@ -134,64 +159,58 @@ object Tables {
     pH          -> "pH",
     conductance -> "µS/cm")
 
-  /** Name of "major chemistry" DB table */
-  val major = "MajorChemistry"
-
-  /** Name of "minor chemistry" DB table */
-  val minor = "MinorandTraceChemistry"
-
   /** Map from CSV "Param" value to associated DB table
     */
   val chemistryTable = Map(
-    alkalinity     -> major,
-    aluminum       -> minor,
-    anions         -> major,
-    antimony       -> minor,
-    arsenic        -> minor,
-    barium         -> minor,
-    beryllium      -> minor,
-    bicarbonate    -> major,
-    boron          -> minor,
-    bromide        -> minor,
-    cadmium        -> minor,
-    calcium        -> major,
-    carbonate      -> major,
-    cations        -> major,
-    chloride       -> major,
-    chromium       -> minor,
-    cobalt         -> minor,
-    copper         -> minor,
-    fluoride       -> minor,
-    hardness       -> major,
-    iron           -> minor,
-    lead           -> minor,
-    lithium        -> minor,
-    magnesium      -> major,
-    manganese      -> minor,
-    molybdenum     -> minor,
-    nickel         -> minor,
-    nitrate        -> minor,
-    nitrite        -> minor,
-    phosphate      -> minor,
-    percentDiff    -> major,
-    potassium      -> major,
-    selenium       -> minor,
-    siliconDioxide -> minor,
-    silicon        -> minor,
-    silver         -> minor,
-    sodium         -> major,
-    conductance    -> major,
-    strontium      -> minor,
-    sulfate        -> major,
-    tds            -> major,
-    thallium       -> minor,
-    thorium        -> minor,
-    tin            -> minor,
-    titanium       -> minor,
-    uranium        -> minor,
-    vanadium       -> minor,
-    zinc           -> minor,
-    pH             -> major)
+    alkalinity     -> MajorChemistry.name,
+    aluminum       -> MinorChemistry.name,
+    anions         -> MajorChemistry.name,
+    antimony       -> MinorChemistry.name,
+    arsenic        -> MinorChemistry.name,
+    barium         -> MinorChemistry.name,
+    beryllium      -> MinorChemistry.name,
+    bicarbonate    -> MajorChemistry.name,
+    boron          -> MinorChemistry.name,
+    bromide        -> MinorChemistry.name,
+    cadmium        -> MinorChemistry.name,
+    calcium        -> MajorChemistry.name,
+    carbonate      -> MajorChemistry.name,
+    cations        -> MajorChemistry.name,
+    chloride       -> MajorChemistry.name,
+    chromium       -> MinorChemistry.name,
+    cobalt         -> MinorChemistry.name,
+    copper         -> MinorChemistry.name,
+    fluoride       -> MinorChemistry.name,
+    hardness       -> MajorChemistry.name,
+    iron           -> MinorChemistry.name,
+    lead           -> MinorChemistry.name,
+    lithium        -> MinorChemistry.name,
+    magnesium      -> MajorChemistry.name,
+    manganese      -> MinorChemistry.name,
+    molybdenum     -> MinorChemistry.name,
+    nickel         -> MinorChemistry.name,
+    nitrate        -> MinorChemistry.name,
+    nitrite        -> MinorChemistry.name,
+    phosphate      -> MinorChemistry.name,
+    percentDiff    -> MajorChemistry.name,
+    potassium      -> MajorChemistry.name,
+    selenium       -> MinorChemistry.name,
+    siliconDioxide -> MinorChemistry.name,
+    silicon        -> MinorChemistry.name,
+    silver         -> MinorChemistry.name,
+    sodium         -> MajorChemistry.name,
+    conductance    -> MajorChemistry.name,
+    strontium      -> MinorChemistry.name,
+    sulfate        -> MajorChemistry.name,
+    tds            -> MajorChemistry.name,
+    thallium       -> MinorChemistry.name,
+    thorium        -> MinorChemistry.name,
+    tin            -> MinorChemistry.name,
+    titanium       -> MinorChemistry.name,
+    uranium        -> MinorChemistry.name,
+    vanadium       -> MinorChemistry.name,
+    zinc           -> MinorChemistry.name,
+    pH             -> MajorChemistry.name)
 
   /** Map from CSV "Param" values to list of "Test" values, in priority order
     */

@@ -6,29 +6,31 @@
 //
 package org.truffulatree.h2odb
 
-import java.io.{File, FileReader}
-import au.com.bytecode.opencsv.CSVReader
+import java.io.{File, FileInputStream}
 import com.healthmarketscience.jackcess.Database
+import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
 object Main {
-  def checkArgs(args: String*): (Option[CSVReader], Option[Database]) = {
+  def checkArgs(args: String*): (Option[HSSFWorkbook], Option[Database]) = {
     if (args.length != 2) {
-      println("Usage: dbfiller [CSV file] [MDB file]")
+      println("Usage: dbfiller [XLS file] [MDB file]")
       (None, None)
     }
     else (
       try {
-        Some(new CSVReader(new FileReader(new File(args(0))), ','))
+        Some(new HSSFWorkbook(new FileInputStream(args(0))))
       } catch {
-        case _: Exception => {
-          println(s"Failed to open ${args(0)} as an CSV file")
+        case e: Exception => {
+          println(e)
+          println(s"Failed to open ${args(0)} as an XLS file")
           None
         }
       },
       try {
         Some(Database.open(new File(args(1)), false, false))
       } catch {
-        case _: Exception => {
+        case e: Exception => {
+          println(e)
           println(s"Failed to open ${args(1)} as an Access file")
           None
         }
@@ -37,9 +39,9 @@ object Main {
 
   def apply(args: String*): xsbti.MainResult = {
     checkArgs(args:_*) match {
-      case (Some(csv), Some(db)) => {
+      case (Some(xls), Some(db)) => {
         try {
-          DBFiller(csv, db)
+          DBFiller(xls, db)
           new Exit(0)
         } catch {
           case e: H2ODbException => {

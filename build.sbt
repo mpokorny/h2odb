@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.3.1-SNAPSHOT"
+version := "0.4.0-SNAPSHOT"
 
 organization := "org.truffulatree"
 
@@ -20,10 +20,10 @@ homepage := Some(url("https://github.com/mpokorny/h2odb"))
 scalaVersion := "2.10.2"
 
 libraryDependencies ++= Seq(
-  "net.sf.opencsv" % "opencsv" % "2.0",
   "com.healthmarketscience.jackcess" % "jackcess" % "1.2.13",
   "org.slf4j" % "slf4j-api" % "1.7.5",
   "ch.qos.logback" % "logback-classic" % "1.0.13",
+  "org.apache.poi" % "poi" % "3.9",
   "org.scala-sbt" % "launcher-interface" % "0.12.0" % "provided")
 
 resolvers ++= Seq(

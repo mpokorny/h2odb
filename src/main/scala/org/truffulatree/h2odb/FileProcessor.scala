@@ -8,40 +8,40 @@ package org.truffulatree.h2odb
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
-import au.com.bytecode.opencsv.CSVReader
 import com.healthmarketscience.jackcess.{Database, Table}
 import org.slf4j.{Logger, LoggerFactory}
+import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
 object DBFiller {
   private val logger = LoggerFactory.getLogger(getClass.getName.init)
 
-  private val samplePointIdCsv = "SamplePointID"
+  private val samplePointIdXls = "SamplePointID"
 
-  /** Type of records from CSV format file of water analysis results
+  /** Type of records from XLS format file of water analysis results
     */
-  type CsvRecord = Map[String,String]
+  type XlsRecord = Map[String,String]
 
   /** Type of record that is recorded in the target database
     */
   type DbRecord = Map[String,Any]
 
-  /** Process a csv file of water analysis records, and insert the processed
+  /** Process a xls file of water analysis records, and insert the processed
     * records into a database.
     *
     * The processing steps are as follows:
     *
-    *  1. Read in all lines of csv file.
-    *  1. Check that header line from csv file has the expected column
+    *  1. Read in all lines of xls file.
+    *  1. Check that header line from xls file has the expected column
     *     names.
-    *  1. Create a sequence corresponding to the rows in the csv file of maps
+    *  1. Create a sequence corresponding to the rows in the xls file of maps
     *     from column title to column value.
     *  1. Check that the "Param" value in each element of the sequence (i.e, a
-    *     csv row) is an expected value.
+    *     xls row) is an expected value.
     *  1. Check that sample point ids in the sequence exist in the database
     *     "Chemistry SampleInfo" table.
     *  1. Check that the "Test" values, for those "Param"s that have tests, are
     *     expected values.
-    *  1. Convert the sequence of maps derived from the csv into a new sequence
+    *  1. Convert the sequence of maps derived from the xls into a new sequence
     *     of maps compatible with the database table schemas.
     *  1. Remove "low priority" test results (this ensures that only the most
     *     preferred test results for those rows with "Test" values get into the
@@ -51,12 +51,12 @@ object DBFiller {
     *     find those records that fail to meet drinking water standards, and
     *     print out a message for those that fail.
     *
-    * @param csv   CSVReader derived from water analysis report in CSV format
+    * @param xls   HSSFWorkbook from water analysis report in XLS format
     * @param db    Database for target database
     */
-  def apply(csv: CSVReader, db: Database) {
-    // read lines from csv file
-    val lines = csv.readAll
+  def apply(xls: HSSFWorkbook, db: Database) {
+    // read rows from xls file
+    val lines = getXlsRows(xls)
     // extract header (column names)
     val header = lines(0)
     // check that header fields have only what is expected
@@ -77,7 +77,7 @@ object DBFiller {
     val minorChemistry = db.getTable(Tables.DbTableInfo.MinorChemistry.name)
     // convert records to db schema compatible format
     val convertedRecords = records map (
-      r => convertCSVRecord(majorChemistry, minorChemistry, r))
+      r => convertXLSRecord(majorChemistry, minorChemistry, r))
     // filter out records for low priority tests
     val newRecords = removeLowPriorityRecords(convertedRecords)
     if (logger.isDebugEnabled)
@@ -98,10 +98,10 @@ object DBFiller {
     *                None, otherwise
     */
   private def validateHeaderFields(header: Seq[String]): Option[Exception] = {
-    if (!header.contains(samplePointIdCsv))
+    if (!header.contains(samplePointIdXls))
       Some(
         new InvalidInputHeader(
-          s"CSV file is missing '$samplePointIdCsv' column"))
+          s"XLS file is missing '$samplePointIdXls' column"))
     else None
   }
 
@@ -109,11 +109,11 @@ object DBFiller {
     *
     * Compare "Param" field values to list of expected values.
     *
-    * @param records  Seq of [[CsvRecord]]s to validate
+    * @param records  Seq of [[XlsRecord]]s to validate
     * @return         Some(exception) when validation fails;
     *                 None, otherwise
     */
-  private def validateParams(records: Seq[CsvRecord]): Option[Exception] = {
+  private def validateParams(records: Seq[XlsRecord]): Option[Exception] = {
     val missing = (Set.empty[String] /: records) {
       case (miss, rec) =>
         if (!Tables.analytes.contains(rec("Param"))) miss + rec("Param")
@@ -132,12 +132,12 @@ object DBFiller {
     * Compare sample point ids to values in the "Chemistry SampleInfo" database
     * table.
     *
-    * @param records  Seq of [[CsvRecord]]s to validate
+    * @param records  Seq of [[XlsRecord]]s to validate
     * @param db       target database
     * @return         Some(exception) when validation fails;
     *                 None, otherwise
     */
-  private def validateSamplePointIDs(records: Seq[CsvRecord], db: Database):
+  private def validateSamplePointIDs(records: Seq[XlsRecord], db: Database):
       Option[Exception] = {
     val knownPoints =
       (Set.empty[String] /:
@@ -148,7 +148,7 @@ object DBFiller {
       }
     val missing = (Set.empty[String] /: records) {
       case (missing, rec) => {
-        rec(samplePointIdCsv) match {
+        rec(samplePointIdXls) match {
           case pt: String => {
             if (!knownPoints.contains(pt)) missing + pt
             else missing
@@ -168,10 +168,10 @@ object DBFiller {
     *
     * Compare "Test" field values to list of expected values
     *
-    * @param records  Seq of [[CsvRecord]]s to validate
+    * @param records  Seq of [[XlsRecord]]s to validate
     * @return         Some(exception) when validation fails; None, otherwise
     */
-  private def validateTests(records: Seq[CsvRecord]): Option[Exception] = {
+  private def validateTests(records: Seq[XlsRecord]): Option[Exception] = {
     def isValidTest(rec: Map[String,String]) = {
       val param = rec("Param")
       !Tables.testPriority.contains(param) ||
@@ -187,17 +187,17 @@ object DBFiller {
     } else None
   }
 
-  /** Convert csv records to database table format
+  /** Convert xls records to database table format
     *
-    * Convert a (single) [[CsvRecord]] into a [[DbRecord]]. The resulting
+    * Convert a (single) [[XlsRecord]] into a [[DbRecord]]. The resulting
     * [[DbRecord]] is ready for addition to the appropriate database table.
     *
     * @param major   "Major chemistry" database table
     * @param minor   "Minor chemistry" database table
-    * @param record  [[CsvRecord]] to convert
+    * @param record  [[XlsRecord]] to convert
     * @return        [[DbRecord]] derived from record
     */
-  private def convertCSVRecord(major: Table, minor: Table, record: CsvRecord):
+  private def convertXLSRecord(major: Table, minor: Table, record: XlsRecord):
       DbRecord = {
     val result: mutable.Map[String,Any] = mutable.Map()
     record foreach {
@@ -327,4 +327,10 @@ object DBFiller {
       }
     } else println("All records meet all drinking water standards")
   }
+
+  private def getXlsRows(xls: HSSFWorkbook) = {
+    val sheet = xls.getSheetAt(0).toList
+    sheet map (_.toList map (_.toString))
+  }
+
 }

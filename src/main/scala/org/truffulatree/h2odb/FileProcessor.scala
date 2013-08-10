@@ -328,9 +328,18 @@ object DBFiller {
     } else println("All records meet all drinking water standards")
   }
 
-  private def getXlsRows(xls: HSSFWorkbook) = {
-    val sheet = xls.getSheetAt(0).toList
-    sheet map (_.toList map (_.toString))
+  private def getXlsRows(xls: HSSFWorkbook): Seq[Seq[String]] = {
+    val sheet = xls.getSheetAt(0)
+    (sheet.getFirstRowNum to sheet.getLastRowNum) map { r =>
+      sheet.getRow(r)
+    } withFilter { row =>
+      row != null
+    } map { row =>
+      (row.getFirstCellNum until row.getLastCellNum) map { c =>
+        val cell = row.getCell(c)
+        if (cell != null) cell.toString else ""
+      }
+    }
   }
 
 }

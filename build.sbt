@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.4.0"
+version := "0.4.1"
 
 organization := "org.truffulatree"
 
@@ -45,7 +45,7 @@ publishTo <<= version { (v: String) =>
   if (v.trim.endsWith("SNAPSHOT"))
     Some("snapshots" at nexus + "content/repositories/snapshots")
   else
-    Some("releases"  at nexus + "service/local/staging/deploy/maven2")
+    Some("staging"  at nexus + "service/local/staging/deploy/maven2")
 }
 
 publishArtifact in Test := false

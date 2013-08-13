@@ -8,6 +8,7 @@ package org.truffulatree.h2odb
 
 import scala.swing._
 import scala.swing.event._
+import javax.swing.UIManager
 import javax.swing.filechooser.FileNameExtensionFilter
 import java.awt.{Cursor, Dimension, Font}
 import scala.concurrent.SyncVar
@@ -215,18 +216,27 @@ object SwingApp extends SimpleSwingApplication {
   }
 }
 
-  class Exit(val code: Int) extends xsbti.Exit
+class Exit(val code: Int) extends xsbti.Exit
 
-  class Run extends xsbti.AppMain {
-    def run(configuration: xsbti.AppConfiguration): xsbti.MainResult = {
-      configuration.provider.scalaProvider.version match {
-        case "2.10.2" => SwingApp.appMain(configuration.arguments)
-        case _ => new xsbti.Reboot {
-          def arguments = configuration.arguments
-          def baseDirectory = configuration.baseDirectory
-          def scalaVersion = "2.10.2"
-          def app = configuration.provider.id
+class Run extends xsbti.AppMain {
+  def run(configuration: xsbti.AppConfiguration): xsbti.MainResult = {
+    configuration.provider.scalaProvider.version match {
+      case "2.10.2" => {
+        try {
+          SwingApp.appMain(configuration.arguments)
+        } catch {
+          case e: Exception => {
+            println(e)
+            new Exit(1)
+          }
         }
+      }
+      case _ => new xsbti.Reboot {
+        def arguments = configuration.arguments
+        def baseDirectory = configuration.baseDirectory
+        def scalaVersion = "2.10.2"
+        def app = configuration.provider.id
       }
     }
   }
+}

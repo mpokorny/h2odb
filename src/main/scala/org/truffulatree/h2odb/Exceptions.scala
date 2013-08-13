@@ -12,7 +12,7 @@ class InvalidInputHeader(message: String)
     extends Exception(message)
     with H2ODbException
 
-class MissingSamplePointID(message: String)
+class DuplicateSample(message: String)
     extends Exception(message)
     with H2ODbException
 

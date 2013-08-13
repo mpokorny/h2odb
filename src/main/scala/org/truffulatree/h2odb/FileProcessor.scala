@@ -36,12 +36,14 @@ object DBFiller {
     *     names.
     *  1. Create a sequence corresponding to the rows in the xls file of maps
     *     from column title to column value.
-    *  1. Check that the "Param" value in each element of the sequence (i.e, a
+    *  1. Check that the "Param" value in each element of the sequence (i.e, an
     *     xls row) is an expected value.
     *  1. Check that the "Test" values, for those "Param"s that have tests, are
     *     expected values.
-    *  1. Remove sequence elements with sample point ids that do not exist in
+    *  1. Remove sequence elements with sample point IDs that do not exist in
     *     the database "Chemistry SampleInfo" table.
+    *  1. Check that sample point IDs in remaining sequence elements do _not_
+    *     exist in major and minor chemistry database tables.
     *  1. Convert the sequence of maps derived from the xls into a new sequence
     *     of maps compatible with the database table schemas.
     *  1. Remove "low priority" test results (this ensures that only the most
@@ -76,8 +78,7 @@ object DBFiller {
       (Set.empty[String] /:
         db.getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)) {
         case (points, row) =>
-          points + row.get(
-            Tables.DbTableInfo.ChemistrySampleInfo.samplePointId).toString
+          points + row.get(Tables.DbTableInfo.samplePointId).toString
       }
     val recordsInDb =
       records withFilter (r => knownPoints.contains(r(samplePointIdXls)))
@@ -88,12 +89,16 @@ object DBFiller {
     // convert records to db schema compatible format
     val convertedRecords = recordsInDb map (
       r => convertXLSRecord(majorChemistry, minorChemistry, r))
+    // check that samples don't already exist in major and minor chem tables
+    validateSamples(
+      convertedRecords,
+      List(majorChemistry, minorChemistry)) foreach (throw _)
     // filter out records for low priority tests
     val newRecords = removeLowPriorityRecords(convertedRecords)
     def appendToTextArea(s: String) {
       textArea.append(s + "\n")
     }
-    if (newRecords.length > 0) {
+    if (!newRecords.isEmpty) {
       if (logger.isDebugEnabled)
         newRecords foreach { rec => logger.debug((rec - "Table").toString) }
       // add rows to database
@@ -161,12 +166,45 @@ object DBFiller {
       Tables.testPriority(param).contains(rec("Test"))
     }
     val invalidTests = records filter (!isValidTest(_))
-    if (invalidTests.length > 0) {
+    if (!invalidTests.isEmpty) {
       val invalid = invalidTests map (
         r => (r("SamplePointID"),r("Param"),r("Test")))
       Some(
         new InvalidTestDescription(
           s"Invalid test descriptions for\n${invalid.mkString("\n")}"))
+    } else None
+  }
+
+  /** Validate samples by checking whether sample point IDs already exist in given
+    * database tables for analytes expected in analysis reports.
+    *
+    * @param records  Seq of [[DbRecord]]s to validate
+    * @param tables   Seq of tables to check for existing sample point IDs
+    * @return         Some(exception) when validation fails; None, otherwise
+    */
+  private def validateSamples(
+    records: Seq[DbRecord],
+    tables: Seq[Table]): Option[Exception] = {
+    def getSamples(t: Table): Set[(String,String)] =
+      (Set.empty[(String,String)] /: t) {
+        case (acc, row) =>
+          acc + ((row.get(Tables.DbTableInfo.samplePointId).toString,
+            row.get(Tables.DbTableInfo.analyte).toString))
+      }
+    val existingSamples = tables map (getSamples _) reduceLeft (_ ++ _)
+    val invalidRecords = records filter { r =>
+      existingSamples.contains(
+        (r(Tables.DbTableInfo.samplePointId).toString,
+          r(Tables.DbTableInfo.analyte).toString))
+    }
+    if (!invalidRecords.isEmpty) {
+      val invalidSamplePointIds = (Set.empty[String] /: invalidRecords) {
+        case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
+      }
+      Some(
+        new DuplicateSample(
+        "Database already contains gen chem data for the following sample points\n" +
+          s"${invalidSamplePointIds.mkString("\n")}"))
     } else None
   }
 
@@ -188,30 +226,30 @@ object DBFiller {
       // "ND" result value
       case ("ReportedND", "ND") => {
         // set value to lower limit (as Float)
-        result("SampleValue") = record("LowerLimit").toFloat
+        result(Tables.DbTableInfo.sampleValue) = record("LowerLimit").toFloat
         // add "symbol" column value (as String)
-        result("Symbol") = "<"
+        result(Tables.DbTableInfo.symbol) = "<"
       }
 
       // normal result value
       case ("ReportedND", v) =>
-        result("SampleValue") = v.toFloat // as Float
+        result(Tables.DbTableInfo.sampleValue) = v.toFloat // as Float
 
       // sample point id
       case ("SamplePointID", id) => {
         // set sample point id (as String)
-        result("SamplePoint_ID") = id
+        result(Tables.DbTableInfo.samplePointId) = id
         // set point id (as String)
-        result("Point_ID") = id.init
+        result(Tables.DbTableInfo.pointId) = id.init
       }
 
       // water parameter identification
       case ("Param", p) => {
         // analyte code (name)
-        result("Analyte") = Tables.analytes(p) // as String
+        result(Tables.DbTableInfo.analyte) = Tables.analytes(p) // as String
         // "AnalysisMethod", if required
         if (Tables.method.contains(p))
-          result("AnalysisMethod") = Tables.method(p) // as String
+          result(Tables.DbTableInfo.analysisMethod) = Tables.method(p) // as String
         // record table this result goes into (as table reference)
         result("Table") = Tables.chemistryTable(p) match {
           case Tables.DbTableInfo.MajorChemistry.name => major
@@ -300,7 +338,7 @@ object DBFiller {
     */
   private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]) {
     val poorQuality = records filter (!meetsAllStandards(_))
-    if (poorQuality.length > 0) {
+    if (!poorQuality.isEmpty) {
       if (poorQuality.length > 1)
         writeln(s"${poorQuality.length} records fail to meet drinking water standards:")
       else

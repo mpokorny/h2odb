@@ -80,7 +80,7 @@ object DBFiller {
             Tables.DbTableInfo.ChemistrySampleInfo.samplePointId).toString
       }
     val recordsInDb =
-      records filter (r => knownPoints.contains(r(samplePointIdXls)))
+      records withFilter (r => knownPoints.contains(r(samplePointIdXls)))
     // get major chemistry table from database
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database

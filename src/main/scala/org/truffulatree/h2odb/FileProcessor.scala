@@ -38,10 +38,10 @@ object DBFiller {
     *     from column title to column value.
     *  1. Check that the "Param" value in each element of the sequence (i.e, a
     *     xls row) is an expected value.
-    *  1. Check that sample point ids in the sequence exist in the database
-    *     "Chemistry SampleInfo" table.
     *  1. Check that the "Test" values, for those "Param"s that have tests, are
     *     expected values.
+    *  1. Remove sequence elements with sample point ids that do not exist in
+    *     the database "Chemistry SampleInfo" table.
     *  1. Convert the sequence of maps derived from the xls into a new sequence
     *     of maps compatible with the database table schemas.
     *  1. Remove "low priority" test results (this ensures that only the most

@@ -6,6 +6,7 @@
 //
 package org.truffulatree.h2odb
 
+import scala.swing._
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import com.healthmarketscience.jackcess.{Database, Table}
@@ -51,10 +52,11 @@ object DBFiller {
     *     find those records that fail to meet drinking water standards, and
     *     print out a message for those that fail.
     *
-    * @param xls   HSSFWorkbook from water analysis report in XLS format
-    * @param db    Database for target database
+    * @param textArea for text output
+    * @param xls      HSSFWorkbook from water analysis report in XLS format
+    * @param db       Database for target database
     */
-  def apply(xls: HSSFWorkbook, db: Database) {
+  def apply(textArea: TextArea, xls: HSSFWorkbook, db: Database) {
     // read rows from xls file
     val lines = getXlsRows(xls)
     // extract header (column names)
@@ -67,26 +69,44 @@ object DBFiller {
     }
     // check for known "Param" field values
     validateParams(records) foreach (throw _)
-    // check for known sample point id field values
-    validateSamplePointIDs(records, db) foreach (throw _)
     // check for known "Test" field values
     validateTests(records) foreach (throw _)
+    // filter for sample point id in db
+    val knownPoints =
+      (Set.empty[String] /:
+        db.getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)) {
+        case (points, row) =>
+          points + row.get(
+            Tables.DbTableInfo.ChemistrySampleInfo.samplePointId).toString
+      }
+    val recordsInDb =
+      records filter (r => knownPoints.contains(r(samplePointIdXls)))
     // get major chemistry table from database
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database
     val minorChemistry = db.getTable(Tables.DbTableInfo.MinorChemistry.name)
     // convert records to db schema compatible format
-    val convertedRecords = records map (
+    val convertedRecords = recordsInDb map (
       r => convertXLSRecord(majorChemistry, minorChemistry, r))
     // filter out records for low priority tests
     val newRecords = removeLowPriorityRecords(convertedRecords)
-    if (logger.isDebugEnabled)
-      newRecords foreach { rec => logger.debug((rec - "Table").toString) }
-    // add rows to database
-    addRows(newRecords)
-    db.flush()
-    // test values against water quality standards
-    checkStandards(newRecords)
+    def appendToTextArea(s: String) {
+      textArea.append(s + "\n")
+    }
+    if (newRecords.length > 0) {
+      if (logger.isDebugEnabled)
+        newRecords foreach { rec => logger.debug((rec - "Table").toString) }
+      // add rows to database
+      addRows(newRecords)
+      db.flush()
+      // test values against water quality standards
+      appendToTextArea(
+        s"Added ${newRecords.length} rows (of ${records.length}) to database")
+      checkStandards(appendToTextArea _, newRecords)
+    } else {
+      appendToTextArea(
+        s"Added 0 rows (of ${records.length}) to database")
+    }
   }
 
   /** Validate header fields
@@ -123,45 +143,8 @@ object DBFiller {
       Some(new MissingParamConversion(
         ("""|The following 'Param' values in the spreadsheet have no known
             |conversion to an analyte code:
-            |""" + missing.mkString(",")).stripMargin))
+            |\n""" + missing.mkString("\n")).stripMargin))
     else None
-  }
-
-  /** Validate sample point ids for all records
-    *
-    * Compare sample point ids to values in the "Chemistry SampleInfo" database
-    * table.
-    *
-    * @param records  Seq of [[XlsRecord]]s to validate
-    * @param db       target database
-    * @return         Some(exception) when validation fails;
-    *                 None, otherwise
-    */
-  private def validateSamplePointIDs(records: Seq[XlsRecord], db: Database):
-      Option[Exception] = {
-    val knownPoints =
-      (Set.empty[String] /:
-        db.getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)) {
-        case (points, row) =>
-          points + row.get(
-            Tables.DbTableInfo.ChemistrySampleInfo.samplePointId).toString
-      }
-    val missing = (Set.empty[String] /: records) {
-      case (missing, rec) => {
-        rec(samplePointIdXls) match {
-          case pt: String => {
-            if (!knownPoints.contains(pt)) missing + pt
-            else missing
-          }
-        }
-      }
-    }
-    if (!missing.isEmpty) {
-      val prefix =
-        s"The following sample point IDs are not in the ${Tables.DbTableInfo.ChemistrySampleInfo.name} table: "
-      Some(
-        new MissingSamplePointID((prefix + missing.mkString(",")).stripMargin))
-    } else None
   }
 
   /** Validate test descriptions for all records
@@ -183,7 +166,7 @@ object DBFiller {
         r => (r("SamplePointID"),r("Param"),r("Test")))
       Some(
         new InvalidTestDescription(
-          s"Invalid test descriptions for ${invalid.mkString(", ")}"))
+          s"Invalid test descriptions for\n${invalid.mkString("\n")}"))
     } else None
   }
 
@@ -312,22 +295,28 @@ object DBFiller {
 
   /** Check and report on analyte test results comparison to standards
     *
-    * @param records  Seq of [[DbRecord]]s to check
+    * @param writeln   function to output a line a text
+    * @param records   Seq of [[DbRecord]]s to check
     */
-  private def checkStandards(records: Seq[DbRecord]) {
-    println(s"Added ${records.length} rows to database")
+  private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]) {
     val poorQuality = records filter (!meetsAllStandards(_))
     if (poorQuality.length > 0) {
       if (poorQuality.length > 1)
-        println(s"${poorQuality.length} records fail to meet drinking water standards:")
+        writeln(s"${poorQuality.length} records fail to meet drinking water standards:")
       else
-        println("1 record fails to meet drinking water standards:")
+        writeln("1 record fails to meet drinking water standards:")
       poorQuality foreach { rec =>
-        println(s"${rec("SamplePoint_ID")} - ${rec("Analyte")} (${rec("SampleValue")} ${rec("Units")})")
+        writeln(s"${rec("SamplePoint_ID")} - ${rec("Analyte")} (${rec("SampleValue")} ${rec("Units")})")
       }
-    } else println("All records meet all drinking water standards")
+    } else writeln("All records meet all drinking water standards")
   }
 
+  /** Get data rows from XLS file.
+    * 
+    * Cell values are converted to strings.
+    * 
+    * @param xls  HSSFWorkbook for XLS input file
+    */
   private def getXlsRows(xls: HSSFWorkbook): Seq[Seq[String]] = {
     val sheet = xls.getSheetAt(0)
     (sheet.getFirstRowNum to sheet.getLastRowNum) map { r =>

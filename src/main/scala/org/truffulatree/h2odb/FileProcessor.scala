@@ -104,13 +104,19 @@ object DBFiller {
       // add rows to database
       addRows(newRecords)
       db.flush()
-      // test values against water quality standards
+      // report on added records
       appendToTextArea(
-        s"Added ${newRecords.length} rows (of ${records.length}) to database")
+        s"Added ${newRecords.length} records with the following sample point IDs to database:")
+      (Set.empty[String] /: newRecords) {
+        case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
+      } foreach { id =>
+        appendToTextArea(id)
+      }
+      appendToTextArea("----------")
+      // test values against water quality standards
       checkStandards(appendToTextArea _, newRecords)
     } else {
-      appendToTextArea(
-        s"Added 0 rows (of ${records.length}) to database")
+      appendToTextArea("Added 0 rows to database")
     }
   }
 

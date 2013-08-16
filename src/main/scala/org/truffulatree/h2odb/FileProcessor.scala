@@ -226,7 +226,8 @@ object DBFiller {
       // "ND" result value
       case ("ReportedND", "ND") => {
         // set value to lower limit (as Float)
-        result(Tables.DbTableInfo.sampleValue) = record("LowerLimit").toFloat
+        result(Tables.DbTableInfo.sampleValue) =
+          record("LowerLimit").toFloat * record("Dilution").toFloat
         // add "symbol" column value (as String)
         result(Tables.DbTableInfo.symbol) = "<"
       }

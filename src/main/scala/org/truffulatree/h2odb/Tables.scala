@@ -8,7 +8,7 @@ package org.truffulatree.h2odb
 
 object Tables {
 
-  /** CSV file "Param" column values
+  /** XLS file "Param" column values
     */
   private object Params {
     val alkalinity      = "Alkalinity as CaCO3"
@@ -64,7 +64,7 @@ object Tables {
 
   import Params._
 
-  /** Map from CSV file "Param" values to DB table analyte values
+  /** Map from XLS file "Param" values to DB table analyte values
     */
   val analytes = Map(
     alkalinity     -> "ALK",
@@ -146,7 +146,7 @@ object Tables {
 
   import DbTableInfo._
 
-  /** Map from CSV "Param" values to DB "AnalysisMethod" values
+  /** Map from XLS "Param" values to DB "AnalysisMethod" values
     */
   val method = Map(
     alkalinity  -> "as CaCO3",
@@ -154,7 +154,7 @@ object Tables {
     tds         -> "Calculation",
     hardness    -> "as CaCO3")
 
-  /** Map from CSV "Results_Units" values to DB "Units" values, by "Param"
+  /** Map from XLS "Results_Units" values to DB "Units" values, by "Param"
     */
   val units = Map(
     anions      -> "epm",
@@ -164,7 +164,7 @@ object Tables {
     pH          -> "pH",
     conductance -> "µS/cm")
 
-  /** Map from CSV "Param" value to associated DB table
+  /** Map from XLS "Param" value to associated DB table
     */
   val chemistryTable = Map(
     alkalinity     -> MajorChemistry.name,
@@ -217,7 +217,7 @@ object Tables {
     zinc           -> MinorChemistry.name,
     pH             -> MajorChemistry.name)
 
-  /** Map from CSV "Param" values to list of "Test" values, in priority order
+  /** Map from XLS "Param" values to list of "Test" values, in priority order
     */
   val testPriority = Map(
     // The order of list elements is from most preferred to least preferred

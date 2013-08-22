@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.5.3"
+version := "0.5.4"
 
 organization := "org.truffulatree"
 

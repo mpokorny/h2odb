@@ -133,6 +133,7 @@ object Tables {
     val pointId        = "Point_ID"
     val analyte        = "Analyte"
     val analysisMethod = "AnalysisMethod"
+    val units          = "Units"
 
     /** Name of "chemistry sample info" table */
     object ChemistrySampleInfo extends TableInfo("Chemistry SampleInfo")

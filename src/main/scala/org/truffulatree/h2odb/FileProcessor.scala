@@ -272,7 +272,8 @@ object DBFiller {
 
       // test result units (as String); some are converted, some not
       case ("Results_Units", u) =>
-        result("Units") = Tables.units.getOrElse(record("Param"), u)
+        result(Tables.DbTableInfo.units) =
+          Tables.units.getOrElse(record("Param"), u)
 
       // drop any other column
       case _ =>
@@ -293,8 +294,8 @@ object DBFiller {
       Seq[Map[String,Any]] =
     ((Map.empty[(String,String),Map[String,Any]] /: records) {
       case (newrecs, rec) => {
-        val key = (rec("SamplePoint_ID").asInstanceOf[String],
-          rec("Analyte").asInstanceOf[String])
+        val key = (rec(Tables.DbTableInfo.samplePointId).asInstanceOf[String],
+          rec(Tables.DbTableInfo.analyte).asInstanceOf[String])
         if (!newrecs.contains(key) ||
           (rec("Priority").asInstanceOf[Int] <
             newrecs(key)("Priority").asInstanceOf[Int]))
@@ -310,9 +311,9 @@ object DBFiller {
     *                false, otherwise
     */
   private def meetsAllStandards(record: DbRecord): Boolean = {
-    (Tables.standards.get(record("Analyte").toString) map {
+    (Tables.standards.get(record(Tables.DbTableInfo.analyte).toString) map {
       case (lo, hi) => {
-        record("SampleValue") match {
+        record(Tables.DbTableInfo.sampleValue) match {
           case v: Float => lo <= v && v <= hi
         }
       }
@@ -344,6 +345,7 @@ object DBFiller {
     * @param records   Seq of [[DbRecord]]s to check
     */
   private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]) {
+    import Tables.DbTableInfo.{samplePointId, analyte, sampleValue, units}
     val poorQuality = records filter (!meetsAllStandards(_))
     if (!poorQuality.isEmpty) {
       if (poorQuality.length > 1)
@@ -351,7 +353,7 @@ object DBFiller {
       else
         writeln("1 record fails to meet drinking water standards:")
       poorQuality foreach { rec =>
-        writeln(s"${rec("SamplePoint_ID")} - ${rec("Analyte")} (${rec("SampleValue")} ${rec("Units")})")
+        writeln(s"${rec(samplePointId)} - ${rec(analyte)} (${rec(sampleValue)} ${rec(units)})")
       }
     } else writeln("All records meet all drinking water standards")
   }

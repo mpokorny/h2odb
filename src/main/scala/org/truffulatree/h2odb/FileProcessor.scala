@@ -6,11 +6,10 @@
 //
 package org.truffulatree.h2odb
 
-import scala.swing._
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import com.healthmarketscience.jackcess.{Database, Table}
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.LoggerFactory
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
 object DBFiller {
@@ -54,11 +53,11 @@ object DBFiller {
     *     find those records that fail to meet drinking water standards, and
     *     print out a message for those that fail.
     *
-    * @param textArea for text output
+    * @param writeln  write a string to output (with added newline)
     * @param xls      HSSFWorkbook from water analysis report in XLS format
     * @param db       Database for target database
     */
-  def apply(textArea: TextArea, xls: HSSFWorkbook, db: Database) {
+  def apply(writeln: (String) => Unit, xls: HSSFWorkbook, db: Database) {
     // read rows from xls file
     val lines = getXlsRows(xls)
     // extract header (column names)
@@ -95,9 +94,6 @@ object DBFiller {
       List(majorChemistry, minorChemistry)) foreach (throw _)
     // filter out records for low priority tests
     val newRecords = removeLowPriorityRecords(convertedRecords)
-    def appendToTextArea(s: String) {
-      textArea.append(s + "\n")
-    }
     if (!newRecords.isEmpty) {
       if (logger.isDebugEnabled)
         newRecords foreach { rec => logger.debug((rec - "Table").toString) }
@@ -105,18 +101,18 @@ object DBFiller {
       addRows(newRecords)
       db.flush()
       // report on added records
-      appendToTextArea(
+      writeln(
         s"Added ${newRecords.length} records with the following sample point IDs to database:")
       (Set.empty[String] /: newRecords) {
         case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
       } foreach { id =>
-        appendToTextArea(id)
+        writeln(id)
       }
-      appendToTextArea("----------")
+      writeln("----------")
       // test values against water quality standards
-      checkStandards(appendToTextArea _, newRecords)
+      checkStandards(writeln, newRecords)
     } else {
-      appendToTextArea("Added 0 rows to database")
+      writeln("Added 0 rows to database")
     }
   }
 
@@ -304,13 +300,13 @@ object DBFiller {
       }
     }).values.toSeq
 
-  /** Compare analyte test results to water quality standards
+  /** Compare analyte test result to water quality standards
     *
-    * @param record  Seq of [[DbRecord]]s to compare to standards
-    * @return        true, if all test results fall within limits;
+    * @param record  [[DbRecord]] to compare to standards
+    * @return        true, if test result falls within limits;
     *                false, otherwise
     */
-  private def meetsAllStandards(record: DbRecord): Boolean = {
+  private def meetsStandards(record: DbRecord): Boolean = {
     (Tables.standards.get(record(Tables.DbTableInfo.analyte).toString) map {
       case (lo, hi) => {
         record(Tables.DbTableInfo.sampleValue) match {
@@ -346,16 +342,18 @@ object DBFiller {
     */
   private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]) {
     import Tables.DbTableInfo.{samplePointId, analyte, sampleValue, units}
-    val poorQuality = records filter (!meetsAllStandards(_))
+    val poorQuality = records filter (!meetsStandards(_))
     if (!poorQuality.isEmpty) {
-      if (poorQuality.length > 1)
-        writeln(s"${poorQuality.length} records fail to meet drinking water standards:")
-      else
-        writeln("1 record fails to meet drinking water standards:")
+      val failStr =
+        if (poorQuality.length > 1)
+          s"${poorQuality.length} records fail"
+        else
+          "1 record fails"
+      writeln(failStr + " to meet water standards:")
       poorQuality foreach { rec =>
         writeln(s"${rec(samplePointId)} - ${rec(analyte)} (${rec(sampleValue)} ${rec(units)})")
       }
-    } else writeln("All records meet all drinking water standards")
+    } else writeln("All records meet all water standards")
   }
 
   /** Get data rows from XLS file.

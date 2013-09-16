@@ -162,16 +162,16 @@ object SwingApp extends SimpleSwingApplication {
         case _: java.io.IOException =>
           throw new OpenException(s"Failed to open ${path} as ${desc}")
       }
+
     try {
       val xls = openFile(
         xlsPath,
         (s: String) => new HSSFWorkbook(new FileInputStream(s)),
         "an Excel file")
-      val db =
-        openFile(
-          dbPath,
-          (s: String) => Database.open(new File(s), false, false),
-          "an Access database")
+      val db = openFile(
+        dbPath,
+        (s: String) => Database.open(new File(s), false, false),
+        "an Access database")
       val resultsFrame = new Frame {
         val textArea = new TextArea(10, 40) {
           lineWrap = true
@@ -196,7 +196,7 @@ object SwingApp extends SimpleSwingApplication {
         title = "Results"
       }
       try {
-        DBFiller(resultsFrame.textArea, xls, db)
+        DBFiller((s: String) => resultsFrame.textArea.append(s + "\n"), xls, db)
       } catch {
         case dbe: H2ODbException =>
           resultsFrame.textArea.append(dbe.getMessage)

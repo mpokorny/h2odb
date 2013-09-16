@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.5.4"
+version := "0.5.5"
 
 organization := "org.truffulatree"
 
@@ -25,7 +25,7 @@ libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.5",
   "ch.qos.logback" % "logback-classic" % "1.0.13",
   "org.apache.poi" % "poi" % "3.9",
-  "org.scala-sbt" % "launcher-interface" % "0.12.0" % "provided")
+  "org.scala-sbt" % "launcher-interface" % "0.13.0" % "provided")
 
 resolvers ++= Seq(
   "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
@@ -48,6 +48,8 @@ publishTo <<= version { (v: String) =>
   else
     Some("staging"  at nexus + "service/local/staging/deploy/maven2")
 }
+
+credentials += Credentials(Path.userHome / ".sbt" / "sonatype.sbt")
 
 publishArtifact in Test := false
 

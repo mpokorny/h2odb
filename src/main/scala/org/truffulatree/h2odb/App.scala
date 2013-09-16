@@ -8,26 +8,35 @@ package org.truffulatree.h2odb
 
 import scala.swing._
 import scala.swing.event._
-import javax.swing.UIManager
 import javax.swing.filechooser.FileNameExtensionFilter
 import java.awt.{Cursor, Dimension, Font}
 import scala.concurrent.SyncVar
 import java.io.{File, FileInputStream}
+import org.slf4j.LoggerFactory
 import com.healthmarketscience.jackcess.Database
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
-object SwingApp extends SimpleSwingApplication {
+/** Add xsbti.MainResult return value to SimpleSwingApplication.main().
+  */
+trait SwingAppMain {
+  self: SimpleSwingApplication =>
+
   private val exitVal = new SyncVar[Int]()
 
-  def appMain(args: Array[String]): xsbti.MainResult = {
+  /** Call SimpleSwingApplication.main(), then wait until exitVal has a value.
+    */
+  def apply(args: Array[String]): xsbti.MainResult = {
     main(args)
-    new Exit(exitVal.get)
+    new Exit(exitVal.take())
   }
 
   override def quit() {
     shutdown()
     exitVal.put(0)
   }
+}
+
+object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
   class SelectButton(
     val buttonText: String,
@@ -47,7 +56,7 @@ object SwingApp extends SimpleSwingApplication {
         fileFilter = button.fileFilter
         multiSelectionEnabled = false
         fileSelectionMode = FileChooser.SelectionMode.FilesOnly
-        title = buttonText
+        title = button.text
       }
     }
   }
@@ -64,8 +73,7 @@ object SwingApp extends SimpleSwingApplication {
       editable = false
     }
 
-    val selectButton =
-      new SelectButton(buttonText, fileFilter, textField)
+    val selectButton = new SelectButton(buttonText, fileFilter, textField)
 
     def reset() {
       if (!selectButton.field.text.isEmpty) {
@@ -219,14 +227,15 @@ object SwingApp extends SimpleSwingApplication {
 class Exit(val code: Int) extends xsbti.Exit
 
 class Run extends xsbti.AppMain {
+  private val logger = LoggerFactory.getLogger(getClass.getName.init)
   def run(configuration: xsbti.AppConfiguration): xsbti.MainResult = {
     configuration.provider.scalaProvider.version match {
       case "2.10.2" => {
         try {
-          SwingApp.appMain(configuration.arguments)
+          SwingApp(configuration.arguments)
         } catch {
           case e: Exception => {
-            println(e)
+            logger.error(e.getMessage)
             new Exit(1)
           }
         }

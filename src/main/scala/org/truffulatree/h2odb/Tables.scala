@@ -240,7 +240,7 @@ object Tables {
     analytes(chromium)       -> ((0.0f, 0.1f)),
     analytes(copper)         -> ((0.0f, 1.0f)),
     analytes(fluoride)       -> ((0.0f, 2.0f)),
-    analytes(hardness)       -> ((0.0f, 300.0f)),
+    analytes(hardness)       -> ((0.0f, 150.0f)),
     analytes(iron)           -> ((0.0f, 0.3f)),
     analytes(lead)           -> ((0.0f, 0.015f)),
     analytes(manganese)      -> ((0.0f, 0.05f)),

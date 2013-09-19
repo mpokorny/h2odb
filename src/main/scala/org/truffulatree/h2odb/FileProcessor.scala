@@ -8,7 +8,7 @@ package org.truffulatree.h2odb
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
-import com.healthmarketscience.jackcess.{Database, Table}
+import com.healthmarketscience.jackcess.{Database, Table, CursorBuilder}
 import org.slf4j.LoggerFactory
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
@@ -41,6 +41,9 @@ object DBFiller {
     *     expected values.
     *  1. Remove sequence elements with sample point IDs that do not exist in
     *     the database "Chemistry SampleInfo" table.
+    *  1. Create map from sample point IDs to sample numbers.
+    *  1. Check that there is exactly one "SampleNumber" value associated with
+    *     each "SamplePointID" value.
     *  1. Check that sample point IDs in remaining sequence elements do _not_
     *     exist in major and minor chemistry database tables.
     *  1. Convert the sequence of maps derived from the xls into a new sequence
@@ -49,6 +52,7 @@ object DBFiller {
     *     preferred test results for those rows with "Test" values get into the
     *     database).
     *  1. Add new rows to the database.
+    *  1. Add sample lab ids to the database.
     *  1. Scan sequence of maps that were just inserted into the database to
     *     find those records that fail to meet drinking water standards, and
     *     print out a message for those that fail.
@@ -80,7 +84,11 @@ object DBFiller {
           points + row.get(Tables.DbTableInfo.samplePointId).toString
       }
     val recordsInDb =
-      records withFilter (r => knownPoints.contains(r(samplePointIdXls)))
+      records filter (r => knownPoints.contains(r(samplePointIdXls)))
+    // collect sample numbers
+    val sampleNumbers = collectSampleNumbers(recordsInDb)
+    // check for unique "SampleNumber" value for each "SamplePointID" value
+    validateSampleNumbers(sampleNumbers) foreach (throw _)
     // get major chemistry table from database
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database
@@ -98,7 +106,8 @@ object DBFiller {
       if (logger.isDebugEnabled)
         newRecords foreach { rec => logger.debug((rec - "Table").toString) }
       // add rows to database
-      addRows(newRecords)
+      addChemTableRows(newRecords)
+      insertLabIds(sampleNumbers, db)
       db.flush()
       // report on added records
       writeln(
@@ -177,6 +186,51 @@ object DBFiller {
     } else None
   }
 
+  /** Collect "SampleNumber" values
+    * 
+    * @param records  Seq of [[XlsRecord]]s
+    * @return         Map from sample point id to set of sample numbers
+    */
+  private def collectSampleNumbers(records: Seq[XlsRecord]):
+      Map[String,Set[String]] = {
+    val sampleNumbers =
+      ((Map.empty[String,mutable.Set[String]]) /: records) {
+        case (acc, rec) => {
+          val sp = rec(samplePointIdXls)
+          if (acc.contains(sp)) {
+            acc(sp) += rec("SampleNumber")
+            acc
+          } else {
+            acc + ((sp, mutable.Set(rec("SampleNumber"))))
+          }
+        }
+      }
+    sampleNumbers.mapValues(_.toSet)
+  }
+
+  /** Validate sample numbers for all records
+    *
+    * Check that every "SamplePointID" is associated with exactly one
+    * "SampleNumber".
+    *
+    * @param sampleNumbers  Map of sample point ids to set of sample numbers
+    * @return               Some(exception) when validation fails; 
+    *                       None, otherwise
+    */
+  private def validateSampleNumbers(sampleNumbers: Map[String,Set[String]]):
+      Option[Exception] = {
+    val nonUnique = sampleNumbers.filter {
+      case (_, sns) => sns.size != 1
+    }
+    if (nonUnique.size > 0)
+      Some(
+        new NonUniqueSampleNumber(
+          "Sample numbers for each of the following sample point ids are variable\n" +
+            s"${nonUnique.keys.mkString("\n")}"))
+    else
+      None
+  }
+
   /** Validate samples by checking whether sample point IDs already exist in given
     * database tables for analytes expected in analysis reports.
     *
@@ -222,41 +276,43 @@ object DBFiller {
     */
   private def convertXLSRecord(major: Table, minor: Table, record: XlsRecord):
       DbRecord = {
+    import Tables.DbTableInfo._
+
     val result: mutable.Map[String,Any] = mutable.Map()
     record foreach {
 
       // "ND" result value
       case ("ReportedND", "ND") => {
         // set value to lower limit (as Float)
-        result(Tables.DbTableInfo.sampleValue) =
+        result(sampleValue) =
           record("LowerLimit").toFloat * record("Dilution").toFloat
         // add "symbol" column value (as String)
-        result(Tables.DbTableInfo.symbol) = "<"
+        result(symbol) = "<"
       }
 
       // normal result value
       case ("ReportedND", v) =>
-        result(Tables.DbTableInfo.sampleValue) = v.toFloat // as Float
+        result(sampleValue) = v.toFloat // as Float
 
       // sample point id
       case ("SamplePointID", id) => {
         // set sample point id (as String)
-        result(Tables.DbTableInfo.samplePointId) = id
+        result(samplePointId) = id
         // set point id (as String)
-        result(Tables.DbTableInfo.pointId) = id.init
+        result(pointId) = id.init
       }
 
       // water parameter identification
       case ("Param", p) => {
         // analyte code (name)
-        result(Tables.DbTableInfo.analyte) = Tables.analytes(p) // as String
+        result(analyte) = Tables.analytes(p) // as String
         // "AnalysisMethod", if required
         if (Tables.method.contains(p))
-          result(Tables.DbTableInfo.analysisMethod) = Tables.method(p) // as String
+          result(analysisMethod) = Tables.method(p) // as String
         // record table this result goes into (as table reference)
         result("Table") = Tables.chemistryTable(p) match {
-          case Tables.DbTableInfo.MajorChemistry.name => major
-          case Tables.DbTableInfo.MinorChemistry.name => minor
+          case MajorChemistry.name => major
+          case MinorChemistry.name => minor
         }
         // set test result priority value (as Int)
         result("Priority") =
@@ -268,8 +324,7 @@ object DBFiller {
 
       // test result units (as String); some are converted, some not
       case ("Results_Units", u) =>
-        result(Tables.DbTableInfo.units) =
-          Tables.units.getOrElse(record("Param"), u)
+        result(units) = Tables.units.getOrElse(record("Param"), u)
 
       // drop any other column
       case _ =>
@@ -316,13 +371,13 @@ object DBFiller {
     }).getOrElse(true)
   }
 
-  /** Add records to database tables
+  /** Add records to chemistry database tables
     *
-    * Add each record to the appropriate database table
+    * Add each record to the appropriate chemistry database table
     *
     * @param records  Seq of [[DbRecord]]s to add to database
     */
-  private def addRows(records: Seq[DbRecord]) {
+  private def addChemTableRows(records: Seq[DbRecord]) {
     val tables = Set((records map (_.apply("Table").asInstanceOf[Table])):_*)
     val colNames = Map(
       (tables.toSeq map { tab => (tab, tab.getColumns.map(_.getName)) }):_*)
@@ -332,6 +387,26 @@ object DBFiller {
         rec.getOrElse(col, null).asInstanceOf[Object] }
       if (logger.isDebugEnabled) logger.debug(s"$row -> ${table.getName})")
       table.addRow(row:_*)
+    }
+  }
+
+  /** Add sample lab ids to chemistry sample info database table
+    *
+    * @param sampleNumbers  Map of sample ids to set of sample numbers
+    *                       (sets are assumed to have one element each)
+    */
+  private def insertLabIds(sampleNumbers: Map[String,Set[String]], db: Database) {
+    import Tables.DbTableInfo._
+    val sampleInfoTable = db.getTable(ChemistrySampleInfo.name)
+    val cursor = CursorBuilder.createCursor(sampleInfoTable)
+    sampleNumbers foreach { 
+      case (sId, sNumSet) =>
+        cursor.findFirstRow(Map(samplePointId -> sId))
+        if (logger.isDebugEnabled)
+          logger.debug(s"${sId}.${labId} <- ${sNumSet.head}")
+        val colUpdate = new java.util.HashMap[String,Object]
+        colUpdate(labId) = sNumSet.head
+        cursor.updateCurrentRowFromMap(colUpdate)
     }
   }
 

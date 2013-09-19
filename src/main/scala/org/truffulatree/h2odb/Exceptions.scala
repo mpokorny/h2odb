@@ -23,3 +23,7 @@ class MissingParamConversion(message: String)
 class InvalidTestDescription(message: String)
     extends Exception(message)
     with H2ODbException
+
+class NonUniqueSampleNumber(message: String)
+    extends Exception(message)
+    with H2ODbException

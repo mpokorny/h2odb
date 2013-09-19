@@ -13,7 +13,7 @@ import java.awt.{Cursor, Dimension, Font}
 import scala.concurrent.SyncVar
 import java.io.{File, FileInputStream}
 import org.slf4j.LoggerFactory
-import com.healthmarketscience.jackcess.Database
+import com.healthmarketscience.jackcess.DatabaseBuilder
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
 /** Add xsbti.MainResult return value to SimpleSwingApplication.main().
@@ -178,7 +178,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         "an Excel file")
       val db = openFile(
         dbPath,
-        (s: String) => Database.open(new File(s), false, false),
+        (s: String) => (new DatabaseBuilder(new File(s))).setAutoSync(false).
+          setReadOnly(false).open,
         "an Access database")
       val resultsFrame = new Frame {
         val textArea = new TextArea(10, 40) {
@@ -197,6 +198,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
             font = font.deriveFont(Font.BOLD)
             horizontalAlignment = Alignment.Center
             border = Swing.EmptyBorder(10, 0, 10, 0)
+            maximumSize = preferredSize
           }
           contents += desc
           contents += scrollPane

@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.5.5"
+version := "0.5.6"
 
 organization := "org.truffulatree"
 
@@ -21,7 +21,7 @@ scalaVersion := "2.10.2"
 
 libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-swing" % "2.10.2",
-  "com.healthmarketscience.jackcess" % "jackcess" % "1.2.13",
+  "com.healthmarketscience.jackcess" % "jackcess" % "2.0.0",
   "org.slf4j" % "slf4j-api" % "1.7.5",
   "ch.qos.logback" % "logback-classic" % "1.0.13",
   "org.apache.poi" % "poi" % "3.9",
@@ -49,7 +49,7 @@ publishTo <<= version { (v: String) =>
     Some("staging"  at nexus + "service/local/staging/deploy/maven2")
 }
 
-credentials += Credentials(Path.userHome / ".sbt" / "sonatype.sbt")
+credentials += Credentials(Path.userHome / ".sbt" / "sonatype.txt")
 
 publishArtifact in Test := false
 

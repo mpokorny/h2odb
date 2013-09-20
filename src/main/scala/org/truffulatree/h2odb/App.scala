@@ -9,9 +9,11 @@ package org.truffulatree.h2odb
 import scala.swing._
 import scala.swing.event._
 import javax.swing.filechooser.FileNameExtensionFilter
-import java.awt.{Cursor, Dimension, Font}
+import javax.swing.JPopupMenu
+import java.awt.{ Cursor, Dimension, Font }
+import java.awt.datatransfer.{ StringSelection }
 import scala.concurrent.SyncVar
-import java.io.{File, FileInputStream}
+import java.io.{ File, FileInputStream }
 import org.slf4j.LoggerFactory
 import com.healthmarketscience.jackcess.DatabaseBuilder
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
@@ -34,6 +36,33 @@ trait SwingAppMain {
     shutdown()
     exitVal.put(0)
   }
+}
+
+object PopupMenu {
+  private[PopupMenu] trait JPopupMenuMixin { def popupMenuWrapper: PopupMenu }
+
+  def defaultLightWeightPopupEnabled: Boolean =
+    JPopupMenu.getDefaultLightWeightPopupEnabled
+
+  def defaultLightWeightPopupEnabled_=(aFlag: Boolean) {
+    JPopupMenu.setDefaultLightWeightPopupEnabled(aFlag)
+  }
+}
+
+class PopupMenu extends Component with SequentialContainer.Wrapper {
+
+  override lazy val peer: JPopupMenu =
+    new JPopupMenu with PopupMenu.JPopupMenuMixin with SuperMixin {
+      def popupMenuWrapper = PopupMenu.this
+    }
+
+  def lightWeightPopupEnabled: Boolean = peer.isLightWeightPopupEnabled
+
+  def lightWeightPopupEnabled_=(aFlag: Boolean) {
+    peer.setLightWeightPopupEnabled(aFlag)
+  }
+
+  def show(invoker: Component, x: Int, y: Int) { peer.show(invoker.peer, x, y) }
 }
 
 object SwingApp extends SimpleSwingApplication with SwingAppMain {
@@ -95,40 +124,42 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
     val quitButton = new Button {
       text = "Quit"
     }
+
     val goButton = new Button {
       text = "Go"
       enabled = false
     }
+
     contents += goButton
     contents += quitButton
+
     border = Swing.EmptyBorder(10)
   }
 
   def top = new MainFrame {
     title = "H2Odb"
+
     val xlsPanel = new FileSelectorPanel(
       "Water analysis report (Excel file)",
       "Select report",
       new FileNameExtensionFilter("Excel file", "xls"))
+
     val dbPanel = new FileSelectorPanel(
       "Database (Access file)",
       "Select database",
       new FileNameExtensionFilter("Access database", "mdb"))
+
     contents = new BoxPanel(Orientation.Vertical) {
       contents += xlsPanel
       contents += dbPanel
       contents += buttonPanel
       border = Swing.EmptyBorder(30, 30, 10, 30)
     }
-    listenTo(buttonPanel.quitButton)
-    listenTo(buttonPanel.goButton)
-    listenTo(xlsPanel.selectButton)
-    listenTo(dbPanel.selectButton)
-    listenTo(xlsPanel.selectButton.field)
-    listenTo(dbPanel.selectButton.field)
+
     reactions += {
       case ButtonClicked(b) if b == buttonPanel.quitButton =>
         quit()
+
       case ButtonClicked(b) if b == buttonPanel.goButton => {
         buttonPanel.goButton.enabled = false
         val xlsPath = xlsPanel.selectButton.field.text
@@ -140,6 +171,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         dbPanel.reset()
         cursor = origCursor
       }
+
       case ButtonClicked(b: SelectButton) => {
         b.chooser.showDialog(b, "Select") match {
           case FileChooser.Result.Approve =>
@@ -147,6 +179,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
           case _ =>
         }
       }
+
       case ValueChanged(f: TextField)
           if (f == xlsPanel.selectButton.field ||
             f == dbPanel.selectButton.field) => {
@@ -157,6 +190,13 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
               buttonPanel.goButton.enabled = false
           }
     }
+
+    listenTo(buttonPanel.quitButton)
+    listenTo(buttonPanel.goButton)
+    listenTo(xlsPanel.selectButton)
+    listenTo(dbPanel.selectButton)
+    listenTo(xlsPanel.selectButton.field)
+    listenTo(dbPanel.selectButton.field)
   }
 
   def runFiller(xlsPath: String, dbPath: String) {
@@ -176,43 +216,72 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         xlsPath,
         (s: String) => new HSSFWorkbook(new FileInputStream(s)),
         "an Excel file")
+
       val db = openFile(
         dbPath,
         (s: String) => (new DatabaseBuilder(new File(s))).setAutoSync(false).
           setReadOnly(false).open,
         "an Access database")
+
       val resultsFrame = new Frame {
+        title = "Results"
+
         val textArea = new TextArea(10, 40) {
+          textArea =>
+
           lineWrap = true
           wordWrap = true
-        }
-        contents = new BoxPanel(Orientation.Vertical) {
-          val scrollPane = new ScrollPane {
-            contents = textArea
-            verticalScrollBarPolicy = ScrollPane.BarPolicy.AsNeeded
-            horizontalScrollBarPolicy = ScrollPane.BarPolicy.Never
+
+          reactions += {
+            case ev @ MousePressed(_,_,_,_,true) => showPopupMenu(ev)
+            case ev @ MouseReleased(_,_,_,_,true) => showPopupMenu(ev)
           }
-          val desc = new TextField {
+          listenTo(mouse.clicks)
+
+          def showPopupMenu(event: MouseEvent) {
+            if (selected != null && selected.length > 0)
+              popupMenu.show(event.source, event.point.x, event.point.y)
+          }
+
+          val popupMenu = new PopupMenu {
+            contents += new MenuItem(
+              Action("Copy") {
+                val selection = new StringSelection(textArea.selected)
+                toolkit.getSystemClipboard.setContents(selection, selection)
+                this.visible = false
+              })
+          }
+        }
+
+        contents = new BoxPanel(Orientation.Vertical) {
+
+          contents += new TextField {
             editable = false
             text = s"${(new File(xlsPath)).getName} loaded into ${(new File(dbPath)).getName}"
             font = font.deriveFont(Font.BOLD)
             horizontalAlignment = Alignment.Center
-            border = Swing.EmptyBorder(10, 0, 10, 0)
+            border = Swing.EmptyBorder(10)
             maximumSize = preferredSize
           }
-          contents += desc
-          contents += scrollPane
+
+          contents += new ScrollPane {
+            contents = textArea
+            verticalScrollBarPolicy = ScrollPane.BarPolicy.AsNeeded
+            horizontalScrollBarPolicy = ScrollPane.BarPolicy.Never
+          }
         }
-        title = "Results"
       }
+
       try {
         DBFiller((s: String) => resultsFrame.textArea.append(s + "\n"), xls, db)
       } catch {
         case dbe: H2ODbException =>
           resultsFrame.textArea.append(dbe.getMessage)
       }
+
       if (resultsFrame.size == new Dimension(0, 0)) resultsFrame.pack()
       resultsFrame.visible = true
+
     } catch {
       case oe: OpenException =>
         Dialog.showOptions(

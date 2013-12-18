@@ -25,6 +25,23 @@ object DBFiller {
     */
   type DbRecord = Map[String,Any]
 
+  implicit object DbRecordOrdering extends Ordering[DbRecord] {
+    def compare(rec0: DbRecord, rec1: DbRecord): Int = {
+      (rec0(Tables.DbTableInfo.samplePointId),
+        rec1(Tables.DbTableInfo.samplePointId)) match {
+        case (id0: String, id1: String) => (id0 compare id1) match {
+          case 0 => {
+            (rec0(Tables.DbTableInfo.analyte),
+              rec1(Tables.DbTableInfo.analyte)) match {
+              case (a0: String, a1: String) => a0 compare a1
+            }
+          }
+          case cmp => cmp
+        }
+      }
+    }
+  }
+
   /** Process a xls file of water analysis records, and insert the processed
     * records into a database.
     *
@@ -110,16 +127,17 @@ object DBFiller {
       insertLabIds(sampleNumbers, db)
       db.flush()
       // report on added records
+      val sortedRecords = newRecords.sorted
       writeln(
         s"Added ${newRecords.length} records with the following sample point IDs to database:")
-      (Set.empty[String] /: newRecords) {
+      (Set.empty[String] /: sortedRecords) {
         case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
       } foreach { id =>
         writeln(id)
       }
       writeln("----------")
       // test values against water quality standards
-      checkStandards(writeln, newRecords)
+      checkStandards(writeln, sortedRecords)
     } else {
       writeln("Added 0 rows to database")
     }
@@ -341,9 +359,8 @@ object DBFiller {
     * @return         Seq of [[DbRecord]]s with only the highest priority test
     *                 results remaining
     */
-  private def removeLowPriorityRecords(records: Seq[DbRecord]):
-      Seq[Map[String,Any]] =
-    ((Map.empty[(String,String),Map[String,Any]] /: records) {
+  private def removeLowPriorityRecords(records: Seq[DbRecord]): Seq[DbRecord] =
+    ((Map.empty[(String,String),DbRecord] /: records) {
       case (newrecs, rec) => {
         val key = (rec(Tables.DbTableInfo.samplePointId).asInstanceOf[String],
           rec(Tables.DbTableInfo.analyte).asInstanceOf[String])
@@ -426,7 +443,10 @@ object DBFiller {
           "1 record fails"
       writeln(failStr + " to meet water standards:")
       poorQuality foreach { rec =>
-        writeln(s"${rec(samplePointId)} - ${rec(analyte)} (${rec(sampleValue)} ${rec(units)})")
+        (rec(samplePointId), rec(analyte), rec(sampleValue), rec(units)) match {
+          case (s: String, a: String, v: Float, u: String) =>
+            writeln(f"$s - $a ($v%g $u)")
+        }
       }
     } else writeln("All records meet all water standards")
   }

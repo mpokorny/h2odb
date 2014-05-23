@@ -262,8 +262,12 @@ object DBFiller {
     def getSamples(t: Table): Set[(String,String)] =
       (Set.empty[(String,String)] /: t) {
         case (acc, row) =>
-          acc + ((row.get(Tables.DbTableInfo.samplePointId).toString,
-            row.get(Tables.DbTableInfo.analyte).toString))
+          val analyte = row.get(Tables.DbTableInfo.analyte)
+          if (analyte != null)
+            acc + ((row.get(Tables.DbTableInfo.samplePointId).toString,
+              row.get(Tables.DbTableInfo.analyte).toString))
+          else
+            acc
       }
     val existingSamples = tables map (getSamples _) reduceLeft (_ ++ _)
     val invalidRecords = records filter { r =>

@@ -127,14 +127,15 @@ object Tables {
       */
     class TableInfo(val name: String)
 
-    val sampleValue    = "SampleValue"
-    val symbol         = "Symbol"
-    val samplePointId  = "SamplePointID"
-    val pointId        = "Point_ID"
-    val analyte        = "Analyte"
-    val analysisMethod = "AnalysisMethod"
-    val units          = "Units"
-    val labId          = "WCLab_ID"
+    val sampleValue     = "SampleValue"
+    val symbol          = "Symbol"
+    val samplePointId   = "SamplePointID"
+    val samplePointGUID = "SamplePtID"
+    val pointId         = "Point_ID"
+    val analyte         = "Analyte"
+    val analysisMethod  = "AnalysisMethod"
+    val units           = "Units"
+    val labId           = "WCLab_ID"
 
     /** Name of "chemistry sample info" table */
     object ChemistrySampleInfo extends TableInfo("Chemistry SampleInfo")

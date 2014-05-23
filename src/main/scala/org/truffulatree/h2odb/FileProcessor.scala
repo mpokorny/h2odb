@@ -110,9 +110,11 @@ object DBFiller {
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database
     val minorChemistry = db.getTable(Tables.DbTableInfo.MinorChemistry.name)
+    // get chemistry sample info table from database
+    val chemSampleInfo = db.getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)
     // convert records to db schema compatible format
     val convertedRecords = recordsInDb map (
-      r => convertXLSRecord(majorChemistry, minorChemistry, r))
+      r => convertXLSRecord(chemSampleInfo, majorChemistry, minorChemistry, r))
     // check that samples don't already exist in major and minor chem tables
     validateSamples(
       convertedRecords,
@@ -265,7 +267,7 @@ object DBFiller {
           val analyte = row.get(Tables.DbTableInfo.analyte)
           if (analyte != null)
             acc + ((row.get(Tables.DbTableInfo.samplePointId).toString,
-              row.get(Tables.DbTableInfo.analyte).toString))
+              analyte.toString))
           else
             acc
       }
@@ -296,11 +298,15 @@ object DBFiller {
     * @param record  [[XlsRecord]] to convert
     * @return        [[DbRecord]] derived from record
     */
-  private def convertXLSRecord(major: Table, minor: Table, record: XlsRecord):
-      DbRecord = {
+  private def convertXLSRecord(
+    info: Table,
+    major: Table,
+    minor: Table,
+    record: XlsRecord): DbRecord = {
     import Tables.DbTableInfo._
 
     val result: mutable.Map[String,Any] = mutable.Map()
+
     record foreach {
 
       // "ND" result value
@@ -322,6 +328,13 @@ object DBFiller {
         result(samplePointId) = id
         // set point id (as String)
         result(pointId) = id.init
+        // set sample point guid (as String)
+        result(samplePointGUID) =
+          (info withFilter { r =>
+            r(samplePointId) == id
+          } map { r =>
+            r(samplePointGUID)
+          }).head.toString
       }
 
       // water parameter identification

@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.5.8"
+version := "0.6.0"
 
 organization := "org.truffulatree"
 
@@ -21,7 +21,7 @@ scalaVersion := "2.10.2"
 
 libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-swing" % "2.10.2",
-  "com.healthmarketscience.jackcess" % "jackcess" % "2.0.0",
+  "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
   "org.slf4j" % "slf4j-api" % "1.7.5",
   "ch.qos.logback" % "logback-classic" % "1.0.13",
   "org.apache.poi" % "poi" % "3.9",

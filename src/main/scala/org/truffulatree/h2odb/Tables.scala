@@ -129,7 +129,7 @@ object Tables {
 
     val sampleValue    = "SampleValue"
     val symbol         = "Symbol"
-    val samplePointId  = "SamplePoint_ID"
+    val samplePointId  = "SamplePointID"
     val pointId        = "Point_ID"
     val analyte        = "Analyte"
     val analysisMethod = "AnalysisMethod"

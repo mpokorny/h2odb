@@ -8,6 +8,7 @@ package org.truffulatree.h2odb
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable
+import scala.util.Try
 import com.healthmarketscience.jackcess.{Database, Table, CursorBuilder}
 import org.slf4j.LoggerFactory
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
@@ -78,21 +79,21 @@ object DBFiller {
     * @param xls      HSSFWorkbook from water analysis report in XLS format
     * @param db       Database for target database
     */
-  def apply(writeln: (String) => Unit, xls: HSSFWorkbook, db: Database) {
+  def apply(writeln: (String) => Unit, xls: HSSFWorkbook, db: Database): Unit = {
     // read rows from xls file
     val lines = getXlsRows(xls)
     // extract header (column names)
     val header = lines(0)
     // check that header fields have only what is expected
-    validateHeaderFields(header) foreach (throw _)
+    validateHeaderFields(header).get
     // create a sequence of maps (column name -> cell value) from cvs rows
     val records = lines.tail map { fields =>
       (header zip fields).toMap
     }
     // check for known "Param" field values
-    validateParams(records) foreach (throw _)
+    validateParams(records).get
     // check for known "Test" field values
-    validateTests(records) foreach (throw _)
+    validateTests(records).get
     // filter for sample point id in db
     val knownPoints =
       (Set.empty[String] /:
@@ -105,7 +106,7 @@ object DBFiller {
     // collect sample numbers
     val sampleNumbers = collectSampleNumbers(recordsInDb)
     // check for unique "SampleNumber" value for each "SamplePointID" value
-    validateSampleNumbers(sampleNumbers) foreach (throw _)
+    validateSampleNumbers(sampleNumbers).get
     // get major chemistry table from database
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database
@@ -118,7 +119,7 @@ object DBFiller {
     // check that samples don't already exist in major and minor chem tables
     validateSamples(
       convertedRecords,
-      List(majorChemistry, minorChemistry)) foreach (throw _)
+      List(majorChemistry, minorChemistry)).get
     // filter out records for low priority tests
     val newRecords = removeLowPriorityRecords(convertedRecords)
     if (!newRecords.isEmpty) {
@@ -150,61 +151,58 @@ object DBFiller {
     * Compare header field names to list of expected names.
     *
     * @param header  Seq of header field names to validate
-    * @return        Some(exception) when validation fails;
-    *                None, otherwise
+    * @return        Unit or an Exception
     */
-  private def validateHeaderFields(header: Seq[String]): Option[Exception] = {
-    if (!header.contains(samplePointIdXls))
-      Some(
-        new InvalidInputHeader(
-          s"XLS file is missing '$samplePointIdXls' column"))
-    else None
-  }
+  private def validateHeaderFields(header: Seq[String]): Try[Unit] =
+    Try {
+      if (!header.contains(samplePointIdXls))
+        throw new InvalidInputHeader(
+          s"XLS file is missing '$samplePointIdXls' column")
+    }
 
   /** Validate param fields for all records
     *
     * Compare "Param" field values to list of expected values.
     *
     * @param records  Seq of [[XlsRecord]]s to validate
-    * @return         Some(exception) when validation fails;
-    *                 None, otherwise
+    * @return         Unit or an Exception
     */
-  private def validateParams(records: Seq[XlsRecord]): Option[Exception] = {
-    val missing = (Set.empty[String] /: records) {
-      case (miss, rec) =>
-        if (!Tables.analytes.contains(rec("Param"))) miss + rec("Param")
-        else miss
+  private def validateParams(records: Seq[XlsRecord]): Try[Unit] =
+    Try {
+      val missing = (Set.empty[String] /: records) {
+        case (miss, rec) =>
+          if (!Tables.analytes.contains(rec("Param"))) miss + rec("Param")
+          else miss
+      }
+      if (!missing.isEmpty)
+        throw new MissingParamConversion(
+          ("""|The following 'Param' values in the spreadsheet have no known
+              |conversion to an analyte code:
+              |\n""" + missing.mkString("\n")).stripMargin)
     }
-    if (!missing.isEmpty)
-      Some(new MissingParamConversion(
-        ("""|The following 'Param' values in the spreadsheet have no known
-            |conversion to an analyte code:
-            |\n""" + missing.mkString("\n")).stripMargin))
-    else None
-  }
 
   /** Validate test descriptions for all records
     *
     * Compare "Test" field values to list of expected values
     *
     * @param records  Seq of [[XlsRecord]]s to validate
-    * @return         Some(exception) when validation fails; None, otherwise
+    * @return         Unit or an Exception
     */
-  private def validateTests(records: Seq[XlsRecord]): Option[Exception] = {
-    def isValidTest(rec: Map[String,String]) = {
-      val param = rec("Param")
-      !Tables.testPriority.contains(param) ||
-      Tables.testPriority(param).contains(rec("Test"))
+  private def validateTests(records: Seq[XlsRecord]): Try[Unit] =
+    Try {
+      def isValidTest(rec: Map[String,String]) = {
+        val param = rec("Param")
+        !Tables.testPriority.contains(param) ||
+        Tables.testPriority(param).contains(rec("Test"))
+      }
+      val invalidTests = records filter (!isValidTest(_))
+      if (!invalidTests.isEmpty) {
+        val invalid = invalidTests map (
+          r => (r("SamplePointID"),r("Param"),r("Test")))
+        throw new InvalidTestDescription(
+          s"Invalid test descriptions for\n${invalid.mkString("\n")}")
+      }
     }
-    val invalidTests = records filter (!isValidTest(_))
-    if (!invalidTests.isEmpty) {
-      val invalid = invalidTests map (
-        r => (r("SamplePointID"),r("Param"),r("Test")))
-      Some(
-        new InvalidTestDescription(
-          s"Invalid test descriptions for\n${invalid.mkString("\n")}"))
-    } else None
-  }
 
   /** Collect "SampleNumber" values
     * 
@@ -234,33 +232,29 @@ object DBFiller {
     * "SampleNumber".
     *
     * @param sampleNumbers  Map of sample point ids to set of sample numbers
-    * @return               Some(exception) when validation fails; 
-    *                       None, otherwise
+    * @return               Unit or an Exception
     */
-  private def validateSampleNumbers(sampleNumbers: Map[String,Set[String]]):
-      Option[Exception] = {
-    val nonUnique = sampleNumbers.filter {
-      case (_, sns) => sns.size != 1
-    }
-    if (nonUnique.size > 0)
-      Some(
-        new NonUniqueSampleNumber(
+  private def validateSampleNumbers(sampleNumbers: Map[String,Set[String]]): Try[Unit] =
+    Try {
+      val nonUnique = sampleNumbers.filter {
+        case (_, sns) => sns.size != 1
+      }
+      if (nonUnique.size > 0)
+        throw new NonUniqueSampleNumber(
           "Sample numbers for each of the following sample point ids are variable\n" +
-            s"${nonUnique.keys.mkString("\n")}"))
-    else
-      None
-  }
+            s"${nonUnique.keys.mkString("\n")}")
+    }
 
   /** Validate samples by checking whether sample point IDs already exist in given
     * database tables for analytes expected in analysis reports.
     *
     * @param records  Seq of [[DbRecord]]s to validate
     * @param tables   Seq of tables to check for existing sample point IDs
-    * @return         Some(exception) when validation fails; None, otherwise
+    * @return         Unit or an Exception
     */
   private def validateSamples(
     records: Seq[DbRecord],
-    tables: Seq[Table]): Option[Exception] = {
+    tables: Seq[Table]): Try[Unit] = {
     def getSamples(t: Table): Set[(String,String)] =
       (Set.empty[(String,String)] /: t) {
         case (acc, row) =>
@@ -277,15 +271,16 @@ object DBFiller {
         (r(Tables.DbTableInfo.samplePointId).toString,
           r(Tables.DbTableInfo.analyte).toString))
     }
-    if (!invalidRecords.isEmpty) {
-      val invalidSamplePointIds = (Set.empty[String] /: invalidRecords) {
-        case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
+    Try {
+      if (!invalidRecords.isEmpty) {
+        val invalidSamplePointIds = (Set.empty[String] /: invalidRecords) {
+          case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
+        }
+        throw new DuplicateSample(
+          "Database already contains gen chem data for the following sample points\n" +
+            s"${invalidSamplePointIds.mkString("\n")}")
       }
-      Some(
-        new DuplicateSample(
-        "Database already contains gen chem data for the following sample points\n" +
-          s"${invalidSamplePointIds.mkString("\n")}"))
-    } else None
+    }
   }
 
   /** Convert xls records to database table format
@@ -429,11 +424,12 @@ object DBFiller {
     * @param sampleNumbers  Map of sample ids to set of sample numbers
     *                       (sets are assumed to have one element each)
     */
-  private def insertLabIds(sampleNumbers: Map[String,Set[String]], db: Database) {
+  private def insertLabIds(sampleNumbers: Map[String,Set[String]], db: Database):
+      Unit = {
     import Tables.DbTableInfo._
     val sampleInfoTable = db.getTable(ChemistrySampleInfo.name)
     val cursor = CursorBuilder.createCursor(sampleInfoTable)
-    sampleNumbers foreach { 
+    sampleNumbers foreach {
       case (sId, sNumSet) =>
         cursor.findFirstRow(Map(samplePointId -> sId))
         if (logger.isDebugEnabled)
@@ -449,7 +445,8 @@ object DBFiller {
     * @param writeln   function to output a line a text
     * @param records   Seq of [[DbRecord]]s to check
     */
-  private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]) {
+  private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]):
+      Unit = {
     import Tables.DbTableInfo.{samplePointId, analyte, sampleValue, units}
     val poorQuality = records filter (!meetsStandards(_))
     if (!poorQuality.isEmpty) {

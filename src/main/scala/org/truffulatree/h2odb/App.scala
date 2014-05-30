@@ -32,7 +32,7 @@ trait SwingAppMain {
     new Exit(exitVal.take())
   }
 
-  override def quit() {
+  override def quit(): Unit = {
     shutdown()
     exitVal.put(0)
   }
@@ -44,7 +44,7 @@ object PopupMenu {
   def defaultLightWeightPopupEnabled: Boolean =
     JPopupMenu.getDefaultLightWeightPopupEnabled
 
-  def defaultLightWeightPopupEnabled_=(aFlag: Boolean) {
+  def defaultLightWeightPopupEnabled_=(aFlag: Boolean): Unit = {
     JPopupMenu.setDefaultLightWeightPopupEnabled(aFlag)
   }
 }
@@ -58,11 +58,13 @@ class PopupMenu extends Component with SequentialContainer.Wrapper {
 
   def lightWeightPopupEnabled: Boolean = peer.isLightWeightPopupEnabled
 
-  def lightWeightPopupEnabled_=(aFlag: Boolean) {
+  def lightWeightPopupEnabled_=(aFlag: Boolean): Unit = {
     peer.setLightWeightPopupEnabled(aFlag)
   }
 
-  def show(invoker: Component, x: Int, y: Int) { peer.show(invoker.peer, x, y) }
+  def show(invoker: Component, x: Int, y: Int): Unit = {
+    peer.show(invoker.peer, x, y)
+  }
 }
 
 object SwingApp extends SimpleSwingApplication with SwingAppMain {
@@ -80,7 +82,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
     resetChooser(None)
 
-    def resetChooser(dir: Option[File]) {
+    def resetChooser(dir: Option[File]): Unit = {
       chooser = new FileChooser(dir.getOrElse(null)) {
         fileFilter = button.fileFilter
         multiSelectionEnabled = false
@@ -104,7 +106,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
     val selectButton = new SelectButton(buttonText, fileFilter, textField)
 
-    def reset() {
+    def reset(): Unit = {
       if (!selectButton.field.text.isEmpty) {
         val file = new File(selectButton.field.text)
         if (file.isFile)
@@ -199,7 +201,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
     listenTo(dbPanel.selectButton.field)
   }
 
-  def runFiller(xlsPath: String, dbPath: String) {
+  def runFiller(xlsPath: String, dbPath: String): Unit = {
 
     class OpenException(m: String) extends Exception(m)
 
@@ -238,7 +240,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
           }
           listenTo(mouse.clicks)
 
-          def showPopupMenu(event: MouseEvent) {
+          def showPopupMenu(event: MouseEvent): Unit = {
             if (selected != null && selected.length > 0)
               popupMenu.show(event.source, event.point.x, event.point.y)
           }

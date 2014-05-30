@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.6.0"
+version := "0.6.1"
 
 organization := "org.truffulatree"
 
@@ -17,15 +17,15 @@ licenses := Seq(
 
 homepage := Some(url("https://github.com/mpokorny/h2odb"))
 
-scalaVersion := "2.10.2"
+scalaVersion := "2.11.1"
 
 libraryDependencies ++= Seq(
-  "org.scala-lang" % "scala-swing" % "2.10.2",
+  "org.scala-lang.modules" % "scala-swing_2.11" % "1.0.1",
   "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
   "org.slf4j" % "slf4j-api" % "1.7.5",
   "ch.qos.logback" % "logback-classic" % "1.0.13",
   "org.apache.poi" % "poi" % "3.9",
-  "org.scala-sbt" % "launcher-interface" % "0.13.0" % "provided")
+  "org.scala-sbt" % "launcher-interface" % "0.13.5" % "provided")
 
 resolvers ++= Seq(
   "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",

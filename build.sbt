@@ -17,7 +17,7 @@ licenses := Seq(
 
 homepage := Some(url("https://github.com/mpokorny/h2odb"))
 
-scalaVersion := "2.11.1"
+scalaVersion := "2.11.4"
 
 libraryDependencies ++= Seq(
   "org.scala-lang.modules" % "scala-swing_2.11" % "1.0.1",

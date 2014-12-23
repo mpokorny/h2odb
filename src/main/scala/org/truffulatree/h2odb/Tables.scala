@@ -236,6 +236,7 @@ object Tables {
     analytes(arsenic)        -> ((0.0f, 0.01f)),
     analytes(barium)         -> ((0.0f, 2.0f)),
     analytes(beryllium)      -> ((0.0f, 0.004f)),
+    analytes(boron)          -> ((0.0f, 7.0f)),
     analytes(cadmium)        -> ((0.0f, 0.005f)),
     analytes(chloride)       -> ((0.0f, 250.0f)),
     analytes(chromium)       -> ((0.0f, 0.1f)),
@@ -253,7 +254,7 @@ object Tables {
     analytes(sodium)         -> ((0.0f, 20.0f)),
     analytes(sulfate)        -> ((0.0f, 250.0f)),
     analytes(tds)            -> ((0.0f, 500.0f)),
-    analytes(thallium)       -> ((0.0f, 0.002f)),
+    analytes(thallium)       -> ((0.0f, 0.0025f)),
     analytes(uranium)        -> ((0.0f, 0.03f)),
     analytes(zinc)           -> ((0.0f, 5.0f)),
     analytes(pH)             -> ((6.5f, 8.5f)))

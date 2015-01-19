@@ -250,7 +250,7 @@ object Tables {
     analytes(nitrite)        -> ((0.0f, 3.3f)),
     analytes(selenium)       -> ((0.0f, 0.05f)),
     analytes(silver)         -> ((0.0f, 0.1f)),
-    analytes(sodium)         -> ((0.0f, 20.0f)),
+    analytes(sodium)         -> ((0.0f, 200.0f)),
     analytes(sulfate)        -> ((0.0f, 250.0f)),
     analytes(tds)            -> ((0.0f, 500.0f)),
     analytes(thallium)       -> ((0.0f, 0.002f)),

@@ -302,6 +302,10 @@ object DBFiller {
 
     val result: mutable.Map[String,Any] = mutable.Map()
 
+    var total: Boolean = false
+
+    var analyteStr: Option[String] = None
+
     record foreach {
 
       // "ND" result value
@@ -334,8 +338,7 @@ object DBFiller {
 
       // water parameter identification
       case ("Param", p) => {
-        // analyte code (name)
-        result(analyte) = Tables.analytes(p) // as String
+        analyteStr = Some(p)
         // "AnalysisMethod", if required
         if (Tables.method.contains(p))
           result(analysisMethod) = Tables.method(p) // as String
@@ -352,6 +355,11 @@ object DBFiller {
             0
       }
 
+      // total analyte
+      case ("Total", t) => {
+        total = (t != null) && t.trim.length > 0
+      }
+
       // test result units (as String); some are converted, some not
       case ("Results_Units", u) =>
         result(units) = Tables.units.getOrElse(record("Param"), u)
@@ -359,6 +367,14 @@ object DBFiller {
       // drop any other column
       case _ =>
     }
+
+    // resolve analyte + total columns
+    analyteStr foreach { str =>
+      // analyte code (name)
+      result(analyte) =
+        Tables.analytes(str) + (if (total) "(total)" else "")
+    }
+
     result.toMap
   }
 

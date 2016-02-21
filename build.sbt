@@ -1,6 +1,6 @@
 // -*- mode: scala -*-
 //
-// Copyright 2013, Martin Pokorny <martin@truffulatree.org>
+// Copyright 2013,2016, Martin Pokorny <martin@truffulatree.org>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
@@ -8,7 +8,7 @@
 //
 name := "H2Odb"
 
-version := "0.6.5"
+version := "0.7.0"
 
 organization := "org.truffulatree"
 
@@ -17,7 +17,7 @@ licenses := Seq(
 
 homepage := Some(url("https://github.com/mpokorny/h2odb"))
 
-scalaVersion := "2.11.4"
+scalaVersion := "2.11.7"
 
 libraryDependencies ++= Seq(
   "org.scala-lang.modules" % "scala-swing_2.11" % "1.0.1",

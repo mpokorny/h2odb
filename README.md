@@ -16,6 +16,6 @@ Please send all comments, suggestions, complaints, requests, *etc.* to <martin@t
 License
 -------
 
-Copyright 2013 Martin Pokorny <martin@truffulatree.org>
+Copyright 2016 Martin Pokorny <martin@truffulatree.org>
 
 The source code files in this project are subject to the terms of the Mozilla Public License, v. 2.0. A copy of the MPL may be found in the [LICENSE](LICENSE) file distributed with this project.

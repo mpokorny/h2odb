@@ -6,7 +6,7 @@ A simple program for loading water analysis records from an Excel spreadsheet in
 Installation
 ------------
 
-H20db may be built and installed using [sbt](http://www.scala-sbt.org/ "sbt") (tested with 0.12.3, 0.12.4 and 0.13.0).
+H20db may be built and installed using [sbt](http://www.scala-sbt.org/ "sbt") (tested with 0.12.x, and 0.13.x up to 0.13.8).
 
 Feedback
 --------

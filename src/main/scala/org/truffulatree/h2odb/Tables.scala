@@ -136,6 +136,10 @@ object Tables {
     val analysisMethod  = "AnalysisMethod"
     val units           = "Units"
     val labId           = "WCLab_ID"
+    val analysesAgency  = "AnalysesAgency"
+
+    /** Value of AnalysesAgency db column */
+    val analysesAgencyDefault = "NMBGMR"
 
     /** Name of "chemistry sample info" table */
     object ChemistrySampleInfo extends TableInfo("Chemistry SampleInfo")

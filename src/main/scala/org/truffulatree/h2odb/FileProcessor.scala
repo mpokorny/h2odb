@@ -59,9 +59,6 @@ object DBFiller {
     *     expected values.
     *  1. Remove sequence elements with sample point IDs that do not exist in
     *     the database "Chemistry SampleInfo" table.
-    *  1. Create map from sample point IDs to sample numbers.
-    *  1. Check that there is exactly one "SampleNumber" value associated with
-    *     each "SamplePointID" value.
     *  1. Check that sample point IDs in remaining sequence elements do _not_
     *     exist in major and minor chemistry database tables.
     *  1. Convert the sequence of maps derived from the xls into a new sequence
@@ -103,10 +100,6 @@ object DBFiller {
       }
     val recordsInDb =
       records filter (r => knownPoints.contains(r(samplePointIdXls)))
-    // collect sample numbers
-    val sampleNumbers = collectSampleNumbers(recordsInDb)
-    // check for unique "SampleNumber" value for each "SamplePointID" value
-    validateSampleNumbers(sampleNumbers).get
     // get major chemistry table from database
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
     // get minor chemistry table from database
@@ -127,7 +120,6 @@ object DBFiller {
         newRecords foreach { rec => logger.debug((rec - "Table").toString) }
       // add rows to database
       addChemTableRows(newRecords)
-      insertLabIds(sampleNumbers, db)
       db.flush()
       // report on added records
       val sortedRecords = newRecords.sorted
@@ -202,47 +194,6 @@ object DBFiller {
         throw new InvalidTestDescription(
           s"Invalid test descriptions for\n${invalid.mkString("\n")}")
       }
-    }
-
-  /** Collect "SampleNumber" values
-    * 
-    * @param records  Seq of [[XlsRecord]]s
-    * @return         Map from sample point id to set of sample numbers
-    */
-  private def collectSampleNumbers(records: Seq[XlsRecord]):
-      Map[String,Set[String]] = {
-    val sampleNumbers =
-      ((Map.empty[String,mutable.Set[String]]) /: records) {
-        case (acc, rec) => {
-          val sp = rec(samplePointIdXls)
-          if (acc.contains(sp)) {
-            acc(sp) += rec("SampleNumber")
-            acc
-          } else {
-            acc + ((sp, mutable.Set(rec("SampleNumber"))))
-          }
-        }
-      }
-    sampleNumbers.mapValues(_.toSet)
-  }
-
-  /** Validate sample numbers for all records
-    *
-    * Check that every "SamplePointID" is associated with exactly one
-    * "SampleNumber".
-    *
-    * @param sampleNumbers  Map of sample point ids to set of sample numbers
-    * @return               Unit or an Exception
-    */
-  private def validateSampleNumbers(sampleNumbers: Map[String,Set[String]]): Try[Unit] =
-    Try {
-      val nonUnique = sampleNumbers.filter {
-        case (_, sns) => sns.size != 1
-      }
-      if (nonUnique.size > 0)
-        throw new NonUniqueSampleNumber(
-          "Sample numbers for each of the following sample point ids are variable\n" +
-            s"${nonUnique.keys.mkString("\n")}")
     }
 
   /** Validate samples by checking whether sample point IDs already exist in given
@@ -364,6 +315,12 @@ object DBFiller {
       case ("Results_Units", u) =>
         result(units) = Tables.units.getOrElse(record("Param"), u)
 
+      // lab id
+      case ("SampleNumber", n) => {
+        result(labId) = n
+        result(analysesAgency) = analysesAgencyDefault
+      }
+
       // drop any other column
       case _ =>
     }
@@ -432,27 +389,6 @@ object DBFiller {
         rec.getOrElse(col, null).asInstanceOf[Object] }
       if (logger.isDebugEnabled) logger.debug(s"$row -> ${table.getName})")
       table.addRow(row:_*)
-    }
-  }
-
-  /** Add sample lab ids to chemistry sample info database table
-    *
-    * @param sampleNumbers  Map of sample ids to set of sample numbers
-    *                       (sets are assumed to have one element each)
-    */
-  private def insertLabIds(sampleNumbers: Map[String,Set[String]], db: Database):
-      Unit = {
-    import Tables.DbTableInfo._
-    val sampleInfoTable = db.getTable(ChemistrySampleInfo.name)
-    val cursor = CursorBuilder.createCursor(sampleInfoTable)
-    sampleNumbers foreach {
-      case (sId, sNumSet) =>
-        cursor.findFirstRow(Map(samplePointId -> sId))
-        if (logger.isDebugEnabled)
-          logger.debug(s"${sId}.${labId} <- ${sNumSet.head}")
-        val colUpdate = new java.util.HashMap[String,Object]
-        colUpdate(labId) = sNumSet.head
-        cursor.updateCurrentRowFromMap(colUpdate)
     }
   }
 

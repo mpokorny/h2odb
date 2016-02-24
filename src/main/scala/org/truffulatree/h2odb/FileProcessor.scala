@@ -125,7 +125,7 @@ object DBFiller {
       val sortedRecords = newRecords.sorted
       writeln(
         s"Added ${newRecords.length} records with the following sample point IDs to database:")
-      (Set.empty[String] /: sortedRecords) {
+        (Set.empty[String] /: sortedRecords) {
         case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
       } foreach { id =>
         writeln(id)
@@ -257,6 +257,8 @@ object DBFiller {
 
     var analyteStr: Option[String] = None
 
+    var methodStr: Option[String] = None
+
     record foreach {
 
       // "ND" result value
@@ -290,9 +292,6 @@ object DBFiller {
       // water parameter identification
       case ("Param", p) => {
         analyteStr = Some(p)
-        // "AnalysisMethod", if required
-        if (Tables.method.contains(p))
-          result(analysisMethod) = Tables.method(p) // as String
         // record table this result goes into (as table reference)
         result("Table") = Tables.chemistryTable(p) match {
           case MajorChemistry.name => major
@@ -304,6 +303,11 @@ object DBFiller {
             Tables.testPriority(p).indexOf(record("Test"))
           else
             0
+      }
+
+      // analysis method
+      case ("Method", m) => {
+        methodStr = Some(m)
       }
 
       // total analyte
@@ -325,12 +329,21 @@ object DBFiller {
       case _ =>
     }
 
-    // resolve analyte + total columns
-    analyteStr foreach { str =>
+    // resolve analyte + total and analysisMethod columns
+    analyteStr foreach { a =>
       // analyte code (name)
       result(analyte) =
-        if (total) totalAnalyte(Tables.analytes(str))
-        else Tables.analytes(str)
+        if (total) totalAnalyte(Tables.analytes(a))
+        else Tables.analytes(a)
+
+      // construct analysisMethod
+      val methodSuffix =
+        if (Tables.method.contains(a)) Some(Tables.method(a))
+        else None
+      result(analysisMethod) =
+        methodStr map { m =>
+          (methodSuffix map { s => m + ", " + s}) getOrElse(m)
+        } orElse(methodSuffix) getOrElse("")
     }
 
     result.toMap
@@ -366,13 +379,13 @@ object DBFiller {
     */
   private def meetsStandards(record: DbRecord): Boolean = {
     import Tables.DbTableInfo._
-    (Tables.standards.get(baseAnalyte(record(analyte).toString)) map {
-      case (lo, hi) => {
-        record(sampleValue) match {
-          case v: Float => lo <= v && v <= hi
+      (Tables.standards.get(baseAnalyte(record(analyte).toString)) map {
+        case (lo, hi) => {
+          record(sampleValue) match {
+            case v: Float => lo <= v && v <= hi
+          }
         }
-      }
-    }).getOrElse(true)
+      }).getOrElse(true)
   }
 
   /** Add records to chemistry database tables
@@ -420,9 +433,9 @@ object DBFiller {
   }
 
   /** Get data rows from XLS file.
-    * 
+    *
     * Cell values are converted to strings.
-    * 
+    *
     * @param xls  HSSFWorkbook for XLS input file
     */
   private def getXlsRows(xls: HSSFWorkbook): Seq[Seq[String]] = {

@@ -165,10 +165,10 @@ object Tables {
   /** Map from XLS "Param" values to DB "AnalysisMethod" values
     */
   val method = Map(
-    alkalinity  -> "as CaCO3",
+    alkalinity  -> "As CaCO3",
     bicarbonate -> "Alkalinity as HCO3",
     tds         -> "Calculation",
-    hardness    -> "as CaCO3")
+    hardness    -> "As CaCO3")
 
   /** Map from XLS "Results_Units" values to DB "Units" values, by "Param"
     */

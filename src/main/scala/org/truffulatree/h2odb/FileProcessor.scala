@@ -329,7 +329,8 @@ object DBFiller {
     analyteStr foreach { str =>
       // analyte code (name)
       result(analyte) =
-        Tables.analytes(str) + (if (total) "(total)" else "")
+        if (total) totalAnalyte(Tables.analytes(str))
+        else Tables.analytes(str)
     }
 
     result.toMap
@@ -364,9 +365,10 @@ object DBFiller {
     *                false, otherwise
     */
   private def meetsStandards(record: DbRecord): Boolean = {
-    (Tables.standards.get(record(Tables.DbTableInfo.analyte).toString) map {
+    import Tables.DbTableInfo._
+    (Tables.standards.get(baseAnalyte(record(analyte).toString)) map {
       case (lo, hi) => {
-        record(Tables.DbTableInfo.sampleValue) match {
+        record(sampleValue) match {
           case v: Float => lo <= v && v <= hi
         }
       }

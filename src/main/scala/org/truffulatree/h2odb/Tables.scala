@@ -149,6 +149,15 @@ object Tables {
 
     /** Name of "minor chemistry" table */
     object MinorChemistry extends TableInfo("MinorandTraceChemistry")
+
+    val totalAnalyteSuffix = "(total)"
+
+    def totalAnalyte(s: String): String =
+      if (s.endsWith(totalAnalyteSuffix)) s
+      else s + totalAnalyteSuffix
+
+    def baseAnalyte(s: String): String =
+      s.stripSuffix(totalAnalyteSuffix)
   }
 
   import DbTableInfo._

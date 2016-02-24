@@ -337,9 +337,7 @@ object DBFiller {
         else Tables.analytes(a)
 
       // construct analysisMethod
-      val methodSuffix =
-        if (Tables.method.contains(a)) Some(Tables.method(a))
-        else None
+      val methodSuffix = Tables.method.get(a)
       result(analysisMethod) =
         methodStr map { m =>
           (methodSuffix map { s => m + ", " + s}) getOrElse(m)

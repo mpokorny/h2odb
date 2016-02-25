@@ -134,6 +134,7 @@ object Tables {
     val pointId         = "Point_ID"
     val analyte         = "Analyte"
     val analysisMethod  = "AnalysisMethod"
+    val analysisDate    = "AnalysisDate"
     val units           = "Units"
     val labId           = "WCLab_ID"
     val analysesAgency  = "AnalysesAgency"

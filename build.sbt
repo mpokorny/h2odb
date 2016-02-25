@@ -20,7 +20,7 @@ homepage := Some(url("https://github.com/mpokorny/h2odb"))
 scalaVersion := "2.11.7"
 
 libraryDependencies ++= Seq(
-  "org.scala-lang.modules" % "scala-swing_2.11" % "1.0.1",
+  "org.scala-lang.modules" %% "scala-swing" % "1.0.1",
   "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
   "org.slf4j" % "slf4j-api" % "1.7.5",
   "ch.qos.logback" % "logback-classic" % "1.0.13",

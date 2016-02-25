@@ -83,7 +83,7 @@ object DBFiller {
     val header = lines(0)
     // check that header fields have only what is expected
     validateHeaderFields(header).get
-    // create a sequence of maps (column name -> cell value) from cvs rows
+    // create a sequence of maps (column name -> cell value) from xls rows
     val records = lines.tail map { fields =>
       (header zip fields).toMap
     }
@@ -400,7 +400,7 @@ object DBFiller {
       val table = rec("Table").asInstanceOf[Table]
       val row = colNames(table) map { col =>
         rec.getOrElse(col, null).asInstanceOf[Object] }
-      if (logger.isDebugEnabled) logger.debug(s"$row -> ${table.getName})")
+      if (logger.isDebugEnabled) logger.debug(s"$row -> ${table.getName}")
       table.addRow(row:_*)
     }
   }

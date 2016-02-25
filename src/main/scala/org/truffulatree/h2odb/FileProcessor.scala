@@ -9,8 +9,10 @@ package org.truffulatree.h2odb
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.util.Try
+import java.util.Date
 import com.healthmarketscience.jackcess.{Database, Table, CursorBuilder}
 import org.slf4j.LoggerFactory
+import org.apache.poi.ss.usermodel.{ Cell, DateUtil }
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 
 object DBFiller {
@@ -18,13 +20,13 @@ object DBFiller {
 
   private val samplePointIdXls = "SamplePointID"
 
-  /** Type of records from XLS format file of water analysis results
-    */
-  type XlsRecord = Map[String,String]
-
   /** Type of record that is recorded in the target database
     */
   type DbRecord = Map[String,Any]
+
+  /** Type of records from XLS format file of water analysis results
+    */
+  type XlsRecord = Map[String,Any]
 
   implicit object DbRecordOrdering extends Ordering[DbRecord] {
     def compare(rec0: DbRecord, rec1: DbRecord): Int = {
@@ -78,13 +80,25 @@ object DBFiller {
     */
   def apply(writeln: (String) => Unit, xls: HSSFWorkbook, db: Database): Unit = {
     // read rows from xls file
-    val lines = getXlsRows(xls)
-    // extract header (column names)
-    val header = lines(0)
+    getXlsRows(xls) match {
+      case header :: rows =>
+        val headerNames = header map { case h => h.asInstanceOf[String] }
+        processRows(writeln, db, headerNames, rows)
+      case _ =>
+        writeln("Added 0 rows to database")
+    }
+  }
+
+  def processRows(
+    writeln: (String) => Unit,
+    db: Database,
+    header: Seq[String],
+    rows: List[Seq[Any]]): Unit = {
+
     // check that header fields have only what is expected
     validateHeaderFields(header).get
     // create a sequence of maps (column name -> cell value) from xls rows
-    val records = lines.tail map { fields =>
+    val records = rows map { fields =>
       (header zip fields).toMap
     }
     // check for known "Param" field values
@@ -125,9 +139,9 @@ object DBFiller {
       val sortedRecords = newRecords.sorted
       writeln(
         s"Added ${newRecords.length} records with the following sample point IDs to database:")
-        (Set.empty[String] /: sortedRecords) {
+      ((Set.empty[String] /: sortedRecords) {
         case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
-      } foreach { id =>
+      }).toSeq.sorted foreach { id =>
         writeln(id)
       }
       writeln("----------")
@@ -163,8 +177,8 @@ object DBFiller {
     Try {
       val missing = (Set.empty[String] /: records) {
         case (miss, rec) =>
-          if (!Tables.analytes.contains(rec("Param"))) miss + rec("Param")
-          else miss
+          val p = rec("Param").asInstanceOf[String]
+          if (!Tables.analytes.contains(p)) miss + p else miss
       }
       if (!missing.isEmpty)
         throw new MissingParamConversion(
@@ -182,15 +196,17 @@ object DBFiller {
     */
   private def validateTests(records: Seq[XlsRecord]): Try[Unit] =
     Try {
-      def isValidTest(rec: Map[String,String]) = {
-        val param = rec("Param")
+      def isValidTest(rec: Map[String,Any]) = {
+        val param = rec("Param").asInstanceOf[String]
         !Tables.testPriority.contains(param) ||
-        Tables.testPriority(param).contains(rec("Test"))
+        Tables.testPriority(param).contains(rec("Test").asInstanceOf[String])
       }
       val invalidTests = records filter (!isValidTest(_))
       if (!invalidTests.isEmpty) {
         val invalid = invalidTests map (
-          r => (r("SamplePointID"),r("Param"),r("Test")))
+          r => (r("SamplePointID").asInstanceOf[String],
+            r("Param").asInstanceOf[String],
+            r("Test").asInstanceOf[String]))
         throw new InvalidTestDescription(
           s"Invalid test descriptions for\n${invalid.mkString("\n")}")
       }
@@ -262,20 +278,20 @@ object DBFiller {
     record foreach {
 
       // "ND" result value
-      case ("ReportedND", "ND") => {
+      case ("ReportedND", "ND") =>
         // set value to lower limit (as Float)
         result(sampleValue) =
-          record("LowerLimit").toFloat * record("Dilution").toFloat
+          record("LowerLimit").asInstanceOf[Float] *
+            record("Dilution").asInstanceOf[Float]
         // add "symbol" column value (as String)
         result(symbol) = "<"
-      }
 
-      // normal result value
-      case ("ReportedND", v) =>
-        result(sampleValue) = v.toFloat // as Float
+      // normal result value...these are _strings_ for some reason
+      case ("ReportedND", v: String) =>
+        result(sampleValue) = v.toFloat
 
       // sample point id
-      case ("SamplePointID", id) => {
+      case ("SamplePointID", id: String) =>
         // set sample point id (as String)
         result(samplePointId) = id
         // set point id (as String)
@@ -287,10 +303,9 @@ object DBFiller {
           } map { r =>
             r(samplePointGUID)
           }).head.toString
-      }
 
       // water parameter identification
-      case ("Param", p) => {
+      case ("Param", p: String) =>
         analyteStr = Some(p)
         // record table this result goes into (as table reference)
         result("Table") = Tables.chemistryTable(p) match {
@@ -303,27 +318,28 @@ object DBFiller {
             Tables.testPriority(p).indexOf(record("Test"))
           else
             0
-      }
 
       // analysis method
-      case ("Method", m) => {
+      case ("Method", m: String) =>
         methodStr = Some(m)
-      }
 
       // total analyte
-      case ("Total", t) => {
+      case ("Total", t: String) =>
         total = (t != null) && t.trim.length > 0
-      }
 
       // test result units (as String); some are converted, some not
-      case ("Results_Units", u) =>
-        result(units) = Tables.units.getOrElse(record("Param"), u)
+      case ("Results_Units", u: String) =>
+        result(units) =
+          Tables.units.getOrElse(record("Param").asInstanceOf[String], u)
 
       // lab id
-      case ("SampleNumber", n) => {
+      case ("SampleNumber", n: String) =>
         result(labId) = n
         result(analysesAgency) = analysesAgencyDefault
-      }
+
+        // analysis timestamp
+      case ("AnalysisTime", d: Date) =>
+        result(analysisDate) = d
 
       // drop any other column
       case _ =>
@@ -432,22 +448,32 @@ object DBFiller {
 
   /** Get data rows from XLS file.
     *
-    * Cell values are converted to strings.
-    *
     * @param xls  HSSFWorkbook for XLS input file
     */
-  private def getXlsRows(xls: HSSFWorkbook): Seq[Seq[String]] = {
+  private def getXlsRows(xls: HSSFWorkbook): List[Seq[Any]] = {
     val sheet = xls.getSheetAt(0)
-    (sheet.getFirstRowNum to sheet.getLastRowNum) map { r =>
+    (sheet.getFirstRowNum to sheet.getLastRowNum).toList map { r =>
       sheet.getRow(r)
     } withFilter { row =>
       row != null
     } map { row =>
       (row.getFirstCellNum until row.getLastCellNum) map { c =>
-        val cell = row.getCell(c)
-        if (cell != null) cell.toString else ""
+        Option(row.getCell(c)) map { cell =>
+          cell.getCellType match {
+            case Cell.CELL_TYPE_STRING =>
+              cell.getStringCellValue
+            case Cell.CELL_TYPE_NUMERIC =>
+              if (DateUtil.isCellDateFormatted(cell))
+                cell.getDateCellValue
+              else
+                cell.getNumericCellValue.toFloat
+            case Cell.CELL_TYPE_BOOLEAN =>
+              cell.getBooleanCellValue
+            case _ =>
+              ""
+          }
+        } getOrElse ("")
       }
     }
   }
-
 }

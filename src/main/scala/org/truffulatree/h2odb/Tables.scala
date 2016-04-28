@@ -238,10 +238,9 @@ object Tables {
     */
   val testPriority = Map(
     // The order of list elements is from most preferred to least preferred
-    strontium   -> List(
-      "Trace metals (total)", "Trace metals (dissolved)",
-      "Cations (Total)", "Cations (dissolved)"),
-    bromide     -> List("Low bromide", "Anions by IC"))
+    strontium -> List("""(?i) *trace +metal.*""".r, """(?i) *cation.*""".r),
+    bromide -> List("""(?i) *low +bromide *""".r, """(?i) *anions +by +ic *""".r)
+  )
 
   /** Map from DB "Analyte" values to range of acceptable values derived from
     * drinking water quality standards.

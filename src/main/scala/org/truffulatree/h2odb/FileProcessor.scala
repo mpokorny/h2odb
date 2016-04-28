@@ -198,8 +198,9 @@ object DBFiller {
     Try {
       def isValidTest(rec: Map[String,Any]) = {
         val param = rec("Param").asInstanceOf[String]
+        val test = rec("Test").asInstanceOf[String]
         !Tables.testPriority.contains(param) ||
-        Tables.testPriority(param).contains(rec("Test").asInstanceOf[String])
+        Tables.testPriority(param).exists(t => t.findFirstIn(test).isDefined)
       }
       val invalidTests = records filter (!isValidTest(_))
       if (!invalidTests.isEmpty) {
@@ -313,11 +314,13 @@ object DBFiller {
           case MinorChemistry.name => minor
         }
         // set test result priority value (as Int)
-        result("Priority") =
-          if (Tables.testPriority.contains(p))
-            Tables.testPriority(p).indexOf(record("Test"))
-          else
-            0
+        result("Priority") = {
+          val thisTest = record("Test").asInstanceOf[String]
+          val optTests = Tables.testPriority.get(p)
+          optTests.map(tests =>
+            tests.indexWhere(_.findFirstIn(thisTest).isDefined)).
+            getOrElse(0)
+        }
 
       // analysis method
       case ("Method", m: String) =>

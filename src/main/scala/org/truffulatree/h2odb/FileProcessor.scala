@@ -6,14 +6,16 @@
 //
 package org.truffulatree.h2odb
 
+import java.util.Date
+
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.util.Try
-import java.util.Date
-import com.healthmarketscience.jackcess.{Database, Table, CursorBuilder}
-import org.slf4j.LoggerFactory
-import org.apache.poi.ss.usermodel.{ Cell, DateUtil }
+
+import com.healthmarketscience.jackcess.{Database, Table}
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
+import org.apache.poi.ss.usermodel.{Cell, DateUtil}
+import org.slf4j.LoggerFactory
 
 object DBFiller {
   private val logger = LoggerFactory.getLogger(getClass.getName.init)
@@ -411,7 +413,7 @@ object DBFiller {
     *
     * @param records  Seq of [[DbRecord]]s to add to database
     */
-  private def addChemTableRows(records: Seq[DbRecord]) {
+  private def addChemTableRows(records: Seq[DbRecord]): Unit = {
     val tables = Set((records map (_.apply("Table").asInstanceOf[Table])):_*)
     val colNames = Map(
       (tables.toSeq map { tab => (tab, tab.getColumns.map(_.getName)) }):_*)
@@ -431,7 +433,7 @@ object DBFiller {
     */
   private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]):
       Unit = {
-    import Tables.DbTableInfo.{samplePointId, analyte, sampleValue, units}
+    import Tables.DbTableInfo.{analyte, samplePointId, sampleValue, units}
     val poorQuality = records filter (!meetsStandards(_))
     if (!poorQuality.isEmpty) {
       val failStr =

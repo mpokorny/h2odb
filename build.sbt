@@ -39,6 +39,7 @@ resolvers <+= sbtResolver
 
 scalacOptions ++= Seq(
     "-deprecation",
+    "-feature",
     "-unchecked",
     "-explaintypes",
     "-Xlint")
@@ -63,14 +64,14 @@ pomExtra := (
   <scm>
     <url>git@github.com:mpokorny/h2odb.git</url>
     <connection>scm:git:git@github.com:mpokorny/h2odb.git</connection>
-  </scm>
-  <developers>
+    </scm>
+    <developers>
     <developer>
-      <id>martin</id>
-      <name>Martin Pokorny</name>
-      <email>martin@truffulatree.org</email>
-      <timezone>America/Denver</timezone>
+    <id>martin</id>
+    <name>Martin Pokorny</name>
+    <email>martin@truffulatree.org</email>
+    <timezone>America/Denver</timezone>
     </developer>
-  </developers>)
+    </developers>)
 
 useGpg := true

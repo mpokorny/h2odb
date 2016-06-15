@@ -303,7 +303,7 @@ class Run extends xsbti.AppMain {
   private val logger = LoggerFactory.getLogger(getClass.getName.init)
   def run(configuration: xsbti.AppConfiguration): xsbti.MainResult = {
     configuration.provider.scalaProvider.version match {
-      case "2.11.4" => {
+      case "2.11.8" => {
         try {
           SwingApp(configuration.arguments)
         } catch {
@@ -316,7 +316,7 @@ class Run extends xsbti.AppMain {
       case _ => new xsbti.Reboot {
         def arguments = configuration.arguments
         def baseDirectory = configuration.baseDirectory
-        def scalaVersion = "2.11.4"
+        def scalaVersion = "2.11.8"
         def app = configuration.provider.id
       }
     }

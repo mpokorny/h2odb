@@ -17,9 +17,12 @@ licenses := Seq(
 
 homepage := Some(url("https://github.com/mpokorny/h2odb"))
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
+
+addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
 
 libraryDependencies ++= Seq(
+  "org.typelevel" %% "cats" % "0.6.0",
   "org.scala-lang.modules" %% "scala-swing" % "1.0.1",
   "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
   "org.slf4j" % "slf4j-api" % "1.7.5",

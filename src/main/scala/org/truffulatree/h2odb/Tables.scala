@@ -36,6 +36,7 @@ object Tables {
     val lithium         = "Lithium"
     val magnesium       = "Magnesium"
     val manganese       = "Manganese"
+    val mercury         = "Mercury"
     val molybdenum      = "Molybdenum 95"
     val nickel          = "Nickel"
     val nitrate         = "Nitrate"
@@ -92,6 +93,7 @@ object Tables {
     lithium        -> "Li",
     magnesium      -> "Mg",
     manganese      -> "Mn",
+    mercury        -> "Hg",
     molybdenum     -> "Mo",
     nickel         -> "Ni",
     nitrate        -> "NO3",
@@ -209,6 +211,7 @@ object Tables {
     lithium        -> MinorChemistry.name,
     magnesium      -> MajorChemistry.name,
     manganese      -> MinorChemistry.name,
+    mercury        -> MinorChemistry.name,
     molybdenum     -> MinorChemistry.name,
     nickel         -> MinorChemistry.name,
     nitrate        -> MinorChemistry.name,
@@ -261,6 +264,7 @@ object Tables {
     analytes(iron)           -> ((0.0f, 0.3f)),
     analytes(lead)           -> ((0.0f, 0.015f)),
     analytes(manganese)      -> ((0.0f, 0.05f)),
+    analytes(mercury)        -> ((0.0f, 0.002f)),
     analytes(nickel)         -> ((0.0f, 0.1f)),
     analytes(nitrate)        -> ((0.0f, 45.0f)),
     analytes(nitrite)        -> ((0.0f, 3.3f)),

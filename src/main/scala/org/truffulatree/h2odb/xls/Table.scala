@@ -6,9 +6,6 @@
 //
 package org.truffulatree.h2odb.xls
 
-import scala.language.higherKinds
-
-import cats._
 import cats.data._
 import cats.std.list._
 import cats.std.option._

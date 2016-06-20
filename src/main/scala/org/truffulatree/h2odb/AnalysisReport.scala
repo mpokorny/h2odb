@@ -6,13 +6,10 @@
 //
 package org.truffulatree.h2odb
 
-import scala.language.higherKinds
-
 import cats._
 import cats.data._
 import cats.std.list._
 import cats.std.option._
-import cats.syntax.all._
 import org.truffulatree.h2odb.xls._
 
 object AnalysisReport {

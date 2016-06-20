@@ -6,11 +6,7 @@
 //
 package org.truffulatree.h2odb
 
-import java.util.Date
-
 import scala.collection.JavaConversions._
-import scala.collection.mutable
-import scala.util.Try
 
 import cats._
 import cats.data._
@@ -48,7 +44,7 @@ object DBFiller {
     *
     *  1. Read in all lines of xls file.
     *  1. Check that header line from xls file has the expected column
-    *     names.
+    *     names.st
     *  1. Create a sequence corresponding to the rows in the xls file of maps
     *     from column title to column value.
     *  1. Check that the "Param" value in each element of the sequence (i.e, an
@@ -86,6 +82,7 @@ object DBFiller {
     db: Database,
     sheet: TState[SState]): Unit = {
 
+    /* TODO: error handling for table lookup failure */
     // get major chemistry table from database
     val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
 
@@ -98,16 +95,19 @@ object DBFiller {
     def getSamples(t: Table): Set[(String,String)] =
       t.foldLeft(Set.empty[(String,String)]) {
         case (acc, row) =>
-          val analyte = row.get(Tables.DbTableInfo.analyte)
-          if (analyte != null)
-            acc + ((row.get(Tables.DbTableInfo.samplePointId).toString,
-                    analyte.toString))
-          else
-            acc
+          Option(row.get(Tables.DbTableInfo.analyte)) map { analyte =>
+            acc + (row.get(Tables.DbTableInfo.samplePointId).toString ->
+                     analyte.toString)
+          } getOrElse acc
       }
 
     val existingSamples =
       List(majorChemistry, minorChemistry) map (getSamples _) reduceLeft (_ ++ _)
+
+    val tableColumns =
+      (List(majorChemistry, minorChemistry) map { t =>
+        t -> t.getColumns.map(_.getName).toSeq
+      }).toMap
 
     implicit val sheetSource = xls.Sheet.source
 
@@ -144,7 +144,7 @@ object DBFiller {
     vDbRecords.value.
       fold(
         showValidationErrors(writeln, _),
-        recAcc => processDbRecords(writeln, recAcc.values))
+        recAcc => processDbRecords(db, tableColumns, writeln, recAcc.values.toSeq))
   }
 
   private def accumulateDbRecord(acc: DbRecordAcc, rec: DbRecord):
@@ -231,8 +231,8 @@ object DBFiller {
 
     val vDbSamplePointGUID =
       Validated.fromOption(
-        (info.withFilter(_(DbTableInfo.samplePointId) == record.samplePointId).
-           map(_(DbTableInfo.samplePointGUID))).headOption.map(_.toString),
+        (info.withFilter(_(DbTableInfo.samplePointId).toString == record.samplePointId).
+           map(_(DbTableInfo.samplePointGUID).toString)).headOption,
         InvalidSamplePointId(record.samplePointId))
 
     val dbTable =
@@ -300,140 +300,70 @@ object DBFiller {
   }
 
   private def processDbRecords(
+    db: Database,
+    tableColumns: Map[Table, Seq[String]],
     writeln: String => Unit,
-    records: Iterable[DbRecord]): Unit = {
+    records: Seq[DbRecord]): Unit = {
 
-    writeln(records.take(20).mkString("\n")) // for testing
-      /* val output = results.fold (
-       *     errs => errs.unwrap map (_.message),
-       *     _ match {
-       *       case (recs@_, poor@_) =>
-       *         showAdditions(recs) ++ Seq("----------") ++ showPoorQuality(poor)
-       *     })
-       *
-       * // filter out records for low priority tests
-       * val newRecords = removeLowPriorityRecords(convertedRecords)
-       * if (!newRecords.isEmpty) {
-       *   if (logger.isDebugEnabled)
-       *     newRecords foreach { rec => logger.debug((rec - "Table").toString) }
-       *       // add rows to database
-       *       addChemTableRows(newRecords)
-       *       db.flush()
-       *       // report on added records
-       *   val sortedRecords = newRecords.sorted
-       *     writeln(
-       *       s"Added ${newRecords.length} records with the following sample point IDs to database:")
-       *       ((Set.empty[String] /: sortedRecords) {
-       *          case (acc, rec) => acc + rec(Tables.DbTableInfo.samplePointId).toString
-       *        }).toSeq.sorted foreach { id =>
-       *         writeln(id)
-       *       }
-       *     writeln("----------")
-       *     // test values against water quality standards
-       *     checkStandards(writeln, sortedRecords)
-       * } else {
-       *   writeln("Added 0 rows to database")
-       * } */
+    if (!records.isEmpty) {
+      
+      if (logger.isDebugEnabled) {
+        records foreach (r => logger.debug(r.toString))
+      }
+
+      /* add rows to database */
+      records foreach addToTable(tableColumns)
+
+      db.flush()
+
+      writeln(
+          s"Added ${records.length} records with the following sample point IDs to database:")
+
+      writeln(records.map(_.samplePointId).distinct.sorted.mkString("\n"))
+
+      writeln("----------")
+
+      /* test values against water quality standards */
+      val poorQuality = records filterNot meetsStandards
+
+      if (poorQuality.isEmpty) {
+        writeln("All records meet water quality standards")
+      } else {
+        val failStr =
+          if (poorQuality.length > 1) s"${poorQuality.length} records fail"
+          else "1 record fails"
+
+        writeln(failStr + " to meet water quality standards:")
+
+        val reports =
+          poorQuality.sorted map (rec =>
+            f"${rec.samplePointId} - ${rec.analyte} (${rec.sampleValue}%g ${rec.units})")
+
+        writeln(reports.mkString("\n"))
+      }
+    } else {
+      writeln("Added 0 rows to database")
+    }
 
   }
 
-  /** Compare analyte test result to water quality standards
-    *
-    * @param record  [[DbRecord]] to compare to standards
-    * @return        true, if test result falls within limits;
-    *                false, otherwise
-    */
-  /* private def meetsStandards(record: DbRecord): Boolean = {
-   *   import Tables.DbTableInfo._
-   *     (Tables.standards.get(baseAnalyte(record(analyte).toString)) map {
-   *        case (lo, hi) => {
-   *          record(sampleValue) match {
-   *            case v: Float => lo <= v && v <= hi
-   *          }
-   *        }
-   *      }).getOrElse(true)
-   * } */
+  private def meetsStandards(record: DbRecord): Boolean = {
+    Tables.standards.get(Tables.DbTableInfo.baseAnalyte(record.analyte)) map {
+      case (lo, hi) => lo <= record.sampleValue && record.sampleValue <= hi 
+    } getOrElse true
+  }
 
-  /** Add records to chemistry database tables
-    *
-    * Add each record to the appropriate chemistry database table
-    *
-    * @param records  Seq of [[DbRecord]]s to add to database
-    */
-  /* private def addChemTableRows(records: Seq[DbRecord]): Unit = {
-   *   val tables = Set((records map (_.apply("Table").asInstanceOf[Table])):_*)
-   *   val colNames = Map(
-   *       (tables.toSeq map { tab => (tab, tab.getColumns.map(_.getName)) }):_*)
-   *     records foreach { rec =>
-   *       val table = rec("Table").asInstanceOf[Table]
-   *       val row = colNames(table) map { col =>
-   *           rec.getOrElse(col, null).asInstanceOf[Object] }
-   *       if (logger.isDebugEnabled) logger.debug(s"$row -> ${table.getName}")
-   *         table.addRow(row:_*)
-   *     }
-   * } */
+  private def addToTable(tableColumns: Map[Table, Seq[String]])(record: DbRecord): Unit = {
+    /* TODO: error handling when table lookup fails? */
+    val colNames = tableColumns.getOrElse(record.table, Seq.empty)
 
-  /** Check and report on analyte test results comparison to standards
-    *
-    * @param writeln   function to output a line a text
-    * @param records   Seq of [[DbRecord]]s to check
-    */
-  /* private def checkStandards(writeln: (String) => Unit, records: Seq[DbRecord]):
-   *     Unit = {
-   *   import Tables.DbTableInfo.{analyte, samplePointId, sampleValue, units}
-   *   val poorQuality = records filter (!meetsStandards(_))
-   *   if (!poorQuality.isEmpty) {
-   *     val failStr =
-   *       if (poorQuality.length > 1)
-   *         s"${poorQuality.length} records fail"
-   *       else
-   *         "1 record fails"
-   *           writeln(failStr + " to meet water standards:")
-   *           poorQuality foreach { rec =>
-   *             (rec(samplePointId), rec(analyte), rec(sampleValue), rec(units)) match {
-   *               case (s: String, a: String, v: Float, u: String) =>
-   *                 writeln(f"$s - $a ($v%g $u)")
-   *             }
-   *           }
-   *   } else writeln("All records meet all water standards")
-   * } */
+    val row =
+      colNames map (col => record.get(col).getOrElse(null).asInstanceOf[Object])
 
-  /* private def showAdditions(recs: Seq[DbRecord]): Seq[String] = {
-   *   val summary =
-   *     s"Added ${recs.length} records with the following sample point IDs to database:"
-   *
-   *   val ids =
-   *     recs.foldLeft(Set.empty[String]) {
-   *       case (acc, rec) =>
-   *         acc + rec(Tables.DbTableInfo.samplePointId).toString
-   *     }.toSeq.sorted
-   *
-   *   summary +: ids
-   * } */
+    if (logger.isDebugEnabled) logger.debug(s"$row -> ${record.table.getName}")
 
-  /* private def showPoorQuality(poor: Seq[DbRecord]): Seq[String] = {
-   *   import Tables.DbTableInfo.{analyte, samplePointId, sampleValue, units}
-   *   if (!poor.isEmpty) {
-   *     val failStr =
-   *       if (poor.length > 1) s"${poor.length} records fail"
-   *       else "1 record fails"
-   *
-   *     val summary = failStr + " to meet water standards:"
-   *
-   *     val reports =
-   *       poor.sorted map { rec =>
-   *         (rec(samplePointId), rec(analyte), rec(sampleValue), rec(units)) match {
-   *           case (s: String, a: String, v: Float, u: String) =>
-   *             f"$s - $a ($v%g $u)"
-   *         }
-   *       }
-   *
-   *     summary +: reports
-   *
-   *   } else {
-   *     Seq("All records meet all water standards")
-   *   }
-   * } */
+    record.table.addRow(row:_*)
+  }
 
   sealed trait Error {
     def message: String

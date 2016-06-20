@@ -11,6 +11,7 @@ import java.util.Date
 import cats.Apply
 import cats.data._
 import cats.std.list._
+import cats.syntax.option._
 import org.truffulatree.h2odb.xls._
 
 final case class AnalysisRecord(
@@ -18,8 +19,10 @@ final case class AnalysisRecord(
   test: String,
   samplePointId: String,
   reportedND: String,
+  lowerLimit: Option[Float],
+  dilution: Float,
   method: String,
-  total: String,
+  total: Option[String],
   units: String,
   sampleNumber: String,
   analysisTime: Date)
@@ -29,40 +32,69 @@ object AnalysisRecord {
       ValidatedNel[Error, AnalysisRecord] = {
 
     def fieldValue[A](name: String)(fn: PartialFunction[CellValue, A]):
-        ValidatedNel[Error, A] = {
-      val getValue: PartialFunction[CellValue, Xor[Error, A]] =
-        (fn andThen Xor.right).
-          orElse { case _ => Xor.left(FieldType(name)) }
+        ValidatedNel[Error, Option[A]] = {
+      val getValue: PartialFunction[CellValue, Xor[Error, Option[A]]] =
+        (fn andThen (a => Xor.right(Some(a)))).
+          orElse {
+            case CellBlank => Xor.right(none)
+            case _ => Xor.left(FieldType(name))
+          }
 
       Xor.fromOption(row.get(name), MissingField(name)).
         flatMap(getValue).toValidatedNel
     }
 
-    def stringValue(name: String): ValidatedNel[Error, String] =
+    def required[A](
+      fv: String => PartialFunction[CellValue, A] => ValidatedNel[Error, Option[A]]):
+        String => PartialFunction[CellValue, A] => ValidatedNel[Error, A] = {
+      name => fn =>
+      fv(name)(fn) andThen (opt =>
+        Validated.fromOption(opt, MissingField(name)).toValidatedNel)
+    }
+
+    def stringValue(name: String): ValidatedNel[Error, Option[String]] =
       fieldValue(name) { case CellString(s@_) => s }
 
-    val vParameter = stringValue("Param")
-    val vTest = stringValue("Test")
-    val vSamplePointId = stringValue("SamplePointID")
-    val vReportedND = stringValue("ReportedND")
-    val vMethod = stringValue("Method")
-    val vTotal = stringValue("Total")
-    val vUnits = stringValue("Results_Units")
-    val vSampleNumber = stringValue("SampleNumber")
-    val vAnalysisTime = fieldValue("AnalysisTime") { case CellDate(d@_) => d }
+    def requiredStringValue(name: String): ValidatedNel[Error, String] =
+      required(fieldValue[String])(name) { case CellString(s@_) => s }
 
-    Apply[ValidatedNel[Error, ?]].map9(
+    /* val requiredStringValue = required(_: String)(stringValue)
+     * 
+     * def requiredFieldValue[A](fn: PartialFunction[CellValue, A]) =
+     *   required(_: String)(fieldValue[A](_)(fn)) */
+
+    val vParameter = requiredStringValue("Param")
+    val vTest = requiredStringValue("Test")
+    val vSamplePointId = requiredStringValue("SamplePointID")
+    val vReportedND = requiredStringValue("ReportedND")
+    val vLowerLimit = fieldValue("LowerLimit") {
+        case CellNumeric(n@_) => n.toFloat
+      }
+    val vDilution = required[Float](fieldValue)("Dilution") {
+        case CellNumeric(n@_) => n.toFloat
+      }
+    val vMethod = requiredStringValue("Method")
+    val vTotal = stringValue("Total")
+    val vUnits = requiredStringValue("Results_Units")
+    val vSampleNumber = requiredStringValue("SampleNumber")
+    val vAnalysisTime = required[Date](fieldValue)("AnalysisTime") {
+        case CellDate(d@_) => d
+      }
+
+    Apply[ValidatedNel[Error, ?]].map11(
       vParameter,
       vTest,
       vSamplePointId,
       vReportedND,
+      vLowerLimit,
+      vDilution,
       vMethod,
       vTotal,
       vUnits,
       vSampleNumber,
       vAnalysisTime) {
-      case (param@_, test@_, spid@_, rnd@_, mth@_, tot@_, un@_, num@_, at@_) =>
-        AnalysisRecord(param, test, spid, rnd, mth, tot, un, num, at)
+      case (param@_, test@_, spid@_, rnd@_, ll@_, dil@_, mth@_, tot@_, un@_, num@_, at@_) =>
+        AnalysisRecord(param, test, spid, rnd, ll, dil, mth, tot, un, num, at)
     }
   }
 

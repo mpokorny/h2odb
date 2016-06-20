@@ -59,7 +59,7 @@ object Sheet {
               getOrElse(eval)
         }
 
-      rowOpt.value map { case (index, row) =>
+      rowOpt.value map { case (index@_, row@_) =>
         (State(sheet, index + 1), (index, getCellValues(row)))
       }
     }

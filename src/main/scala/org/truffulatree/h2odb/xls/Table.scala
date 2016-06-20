@@ -16,128 +16,127 @@ import org.apache.poi.hssf.usermodel.HSSFSheet
 
 object Table {
 
-  type Source[S, F[_]] =
-    StateT[F, S, (Int, ValidatedNel[Error, Map[String, CellValue]])]
+  type Source[S] =
+    StateT[Option, S, (Int, ValidatedNel[Error, Map[String, CellValue]])]
 
   def validateColTypes(
-    template: List[CellValue],
+    template: List[Option[CellValue]],
     row: List[CellValue]):
-      ValidatedNel[Error, List[CellValue]]= {
+      (List[Option[CellValue]], ValidatedNel[Error, List[CellValue]]) = {
 
-    def validate(cell: ((CellValue, CellValue), Int)):
-        ValidatedNel[Error, CellValue] = {
+    def validate(cell: ((Option[CellValue], CellValue), Int)):
+        (Option[CellValue], ValidatedNel[Error, CellValue]) = {
       val ((templateValue, cellValue), colIdx) = cell
 
-      if (cellValue.hasTypeOf(templateValue))
-        Validated.valid(cellValue)
-      else
-        Validated.invalidNel(CellType(colIdx, templateValue.typeDescription))
+      templateValue map { setValue =>
+        val vCell: ValidatedNel[Error, CellValue] =
+          /* allow blank values everywhere to support optional values */
+          if (cellValue.hasTypeOf(setValue) || cellValue.hasTypeOf(CellBlank))
+            Validated.valid(cellValue)
+          else
+            Validated.invalidNel(CellType(colIdx, setValue.typeDescription))
+
+        (Some(setValue), vCell)
+      } getOrElse {
+        // set template for this cell only if cell is not blank
+        val setValue: Option[CellValue] = 
+          if (cellValue.hasTypeOf(CellBlank)) None
+          else Some(cellValue)
+
+        (setValue, Validated.valid(cellValue))
+      }
     }
 
-    val cells =
-      template.zipAll(row, CellBlank, CellBlank).zipWithIndex
+    val cells = template.zipAll(row, None, CellBlank).zipWithIndex
 
-    listInstance.traverseU(cells)(validate)
+    val (newTemplate, vCells) =
+      cells.foldLeft(
+        (List.empty[Option[CellValue]],
+         Validated.valid[Error, List[CellValue]](List.empty).toValidatedNel)) {
+        case ((template@_, vCells@_), cell@_) =>
+          val (cTemplate, vCell) = validate(cell)
+
+          (cTemplate :: template, vCell.map(List(_)).combine(vCells))
+      }
+
+    (newTemplate.reverse, vCells.map(_.reverse))
   }
 
   sealed trait State[S] {
 
     implicit val S: Sheet.Source[S]
 
-    def nextRecord[F[_]: MonadCombine]:
-        F[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))]
+    def nextRecord:
+        Option[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))]
   }
 
-  final class StateUninitialized[S: Sheet.Source](source: S) extends State[S] {
+  final class StateUninitialized[S](source: S)(implicit val S: Sheet.Source[S]) extends State[S] {
 
     val cellString = CellString("")
 
-    override def nextRecord[F[_]: MonadCombine]:
-        F[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] = {
+    override def nextRecord:
+        Option[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] = {
 
-      implicit val F = implicitly[MonadCombine[F]]
+      val next =
+        S.run(source) map {
+          case (newSrc@_, (i@_, hdr@_)) =>
+            val nonStringHdrIndices =
+              hdr.zipWithIndex.
+                withFilter(h => !h._1.hasTypeOf(cellString)).
+                map(_._2)
+            if (nonStringHdrIndices.length > 0) {
+              val newState: State[S] = new StateDone
+              val err: ValidatedNel[Error, Map[String, CellValue]] =
+                Validated.invalidNel(InvalidHeader(nonStringHdrIndices))
 
-      S.run(source) map {
-        case (newSrc@_, (i@_, hdr@_)) =>
-          val nonStringHdrIndices =
-            hdr.zipWithIndex.
-              withFilter(h => !h._1.hasTypeOf(cellString)).
-              map(_._2)
-          if (nonStringHdrIndices.length > 0) {
-            val newState: State[S] = new StateDone()
-            val err: ValidatedNel[Error, Map[String, CellValue]] =
-              Validated.invalidNel(InvalidHeader(nonStringHdrIndices))
-
-            F.pure((newState, (i, err)))
-          } else {
-            val hdrNames = hdr collect { case CellString(s@_) => s }
-
-            new StateWithColumnNames(newSrc, hdrNames).nextRecord(F)
-          }
-
-      } getOrElse F.empty
-    }
-  }
-
-  final class StateWithColumnNames[S: Sheet.Source](
-    source: S,
-    colNames: Seq[String]) extends State[S] {
-
-    override def nextRecord[F[_]: MonadCombine]:
-        F[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] = {
-
-      implicit val F = implicitly[MonadCombine[F]]
-
-      S.run(source) map {
-        case (newSrc@_, (i@_, cvs@_)) =>
-          val (newState: State[S], rval) =
-            if (cvs.length != colNames.length) {
-              (new StateDone(),
-               Validated.invalidNel[Error, Map[String, CellValue]](
-                 RowHeaderConflict(colNames.length, cvs.length)))
+              Some((newState, (i, err)))
             } else {
-              (new StateReady(newSrc, colNames, cvs.toList),
-               Validated.valid[Error, Map[String, CellValue]](
-                 colNames.zip(cvs).toMap).toValidatedNel)
+              val hdrNames = hdr collect { case CellString(s@_) => s }
+
+              new StateReady(
+                newSrc,
+                hdrNames,
+                List.fill(hdrNames.length)(None)).
+                nextRecord
             }
 
-          F.pure((newState, (i, rval)))
+        }
 
-      } getOrElse F.empty
+      next getOrElse None
     }
   }
 
-  final class StateReady[S: Sheet.Source](
+  final class StateReady[S](
     source: S,
     colNames: Seq[String],
-    cellTemplate: List[CellValue]) extends State[S] {
+    cellTemplate: List[Option[CellValue]])(implicit val S: Sheet.Source[S]) extends State[S] {
 
-    override def nextRecord[F[_]: MonadCombine]:
-        F[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] = {
+    override def nextRecord:
+        Option[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] = {
 
-      implicit val F = implicitly[MonadCombine[F]]
+      val next =
+        S.run(source) map {
+          case (newSrc@_, (i@_, cvs@_)) =>
+            val (newTemplate, vcvs) = validateColTypes(cellTemplate, cvs.toList)
+            val rval = vcvs.map(colNames.zip(_).toMap)
+            val newState: State[S] = new StateReady(newSrc, colNames, newTemplate)
 
-      S.run(source) map {
-        case (newSrc@_, (i@_, cvs@_)) =>
-          val newState: State[S] =
-            new StateReady(newSrc, colNames, cellTemplate)
-          val rval =
-            validateColTypes(cellTemplate, cvs.toList).
-              map(cells => colNames.zip(cells).toMap)
+            Some((newState, (i, rval)))
+        }
 
-          F.pure((newState, (i, rval)))
-      } getOrElse F.empty
+      next getOrElse None
     }
   }
 
-  final class StateDone[S: Sheet.Source]() extends State[S]  {
-    override def nextRecord[F[_]: MonadCombine]:
-        F[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] =
-      implicitly[MonadCombine[F]].empty
+  final class StateDone[S](implicit val S: Sheet.Source[S]) extends State[S]  {
+
+    override def nextRecord:
+        Option[(State[S], (Int, ValidatedNel[Error, Map[String, CellValue]]))] =
+      None
   }
 
-  def source[S: Sheet.Source, F[_]: MonadCombine]: Source[State[S], F] =
-    StateT(_.nextRecord[F])
+  def source[S: Sheet.Source]: Source[State[S]] =
+    StateT(_.nextRecord)
 
   def initial(sheet: HSSFSheet): State[Sheet.State] = {
     implicit val cellsSource = Sheet.source
@@ -147,6 +146,5 @@ object Table {
 
   sealed trait Error
   final case class InvalidHeader(columns: Seq[Int]) extends Error
-  final case class RowHeaderConflict(headerColumns: Int, rowColumns: Int) extends Error
   final case class CellType(column: Int, expectedType: String) extends Error
 }

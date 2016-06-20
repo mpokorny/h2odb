@@ -274,12 +274,7 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         }
       }
 
-      try {
-        DBFiller((s: String) => resultsFrame.textArea.append(s + "\n"), xls, db)
-      } catch {
-        case dbe: H2ODbException =>
-          resultsFrame.textArea.append(dbe.getMessage)
-      }
+      DBFiller((s: String) => resultsFrame.textArea.append(s + "\n"), xls, db)
 
       if (resultsFrame.size == new Dimension(0, 0)) resultsFrame.pack()
       resultsFrame.visible = true

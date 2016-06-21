@@ -15,11 +15,12 @@ import cats.std.option._
 import cats.syntax.option._
 import cats.syntax.foldable._
 import com.healthmarketscience.jackcess.{Database, Table}
+import com.typesafe.scalalogging.Logger
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.slf4j.LoggerFactory
 
 object DBFiller {
-  private val logger = LoggerFactory.getLogger(getClass.getName.init)
+  private val logger = Logger(LoggerFactory.getLogger(getClass.getName.init))
 
   import xls.Table.{State => TState}
   import xls.Sheet.{State => SState}
@@ -306,10 +307,8 @@ object DBFiller {
     records: Seq[DbRecord]): Unit = {
 
     if (!records.isEmpty) {
-      
-      if (logger.isDebugEnabled) {
-        records foreach (r => logger.debug(r.toString))
-      }
+
+      logger.debug(records.mkString("\n"))
 
       /* add rows to database */
       records foreach addToTable(tableColumns)
@@ -360,7 +359,7 @@ object DBFiller {
     val row =
       colNames map (col => record.get(col).getOrElse(null).asInstanceOf[Object])
 
-    if (logger.isDebugEnabled) logger.debug(s"$row -> ${record.table.getName}")
+    logger.debug(s"$row -> ${record.table.getName}")
 
     record.table.addRow(row:_*)
   }

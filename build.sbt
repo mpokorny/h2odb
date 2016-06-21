@@ -26,8 +26,9 @@ libraryDependencies ++= Seq(
   "org.scala-lang.modules" %% "scala-swing" % "1.0.1",
   "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
   "org.slf4j" % "slf4j-api" % "1.7.5",
-  "ch.qos.logback" % "logback-classic" % "1.0.13",
+  "ch.qos.logback" % "logback-classic" % "1.1.7",
   "org.apache.poi" % "poi" % "3.9",
+  "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0",
   "org.scala-sbt" % "launcher-interface" % "0.13.5" % "provided")
 
 resolvers ++= Seq(

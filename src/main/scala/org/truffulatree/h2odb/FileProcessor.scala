@@ -372,7 +372,8 @@ object DBFiller {
     } getOrElse true
   }
 
-  private def addToTable(tableColumns: Map[Table, Seq[String]])(record: DbRecord): Unit = {
+  private def addToTable(tableColumns: Map[Table, Seq[String]])(record: DbRecord):
+      Unit = {
     /* TODO: error handling when table lookup fails? */
     val colNames = tableColumns.getOrElse(record.table, Seq.empty)
 

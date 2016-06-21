@@ -72,26 +72,43 @@ object DBFiller {
     * @param db       Database for target database
     */
   def apply(writeln: String => Unit, workbook: HSSFWorkbook, db: Database): Unit = {
-    Xor.catchOnly[IllegalArgumentException](workbook.getSheetAt(0)).fold(
-      _ => writeln("Failed to open worksheet 0 of XLS file: added 0 rows to database"),
-      sh => processRows(writeln, db, xls.Table.initial(sh))
-    )
+    def getTable(name: String): Xor[String, Table] =
+      Xor.fromOption(
+        Option(db.getTable(name)),
+        s"Failed to find '${name}' table in database")
+
+    /* get major chemistry table from database */
+    val majorChemistry = getTable(Tables.DbTableInfo.MajorChemistry.name)
+
+    /* get minor chemistry table from database */
+    val minorChemistry = getTable(Tables.DbTableInfo.MinorChemistry.name)
+
+    /* get chemistry sample info table from database */
+    val chemSampleInfo = getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)
+
+    val worksheet =
+      Xor.catchOnly[IllegalArgumentException](workbook.getSheetAt(0)).
+        leftMap(_ => "Failed to open worksheet 0 of XLS file")
+
+    Apply[ValidatedNel[String, ?]].map4(
+      majorChemistry.toValidatedNel,
+      minorChemistry.toValidatedNel,
+      chemSampleInfo.toValidatedNel,
+      worksheet.toValidatedNel) {
+      case (major@_, minor@_, info@_, sheet@_) =>
+        processRows(writeln, db, major, minor, info, xls.Table.initial(sheet))
+    } fold (
+      errs => errs.unwrap.map(writeln),
+      _ => ())
   }
 
   def processRows(
     writeln: (String) => Unit,
     db: Database,
+    majorChemistry: Table,
+    minorChemistry: Table,
+    chemSampleInfo: Table,
     sheet: TState[SState]): Unit = {
-
-    /* TODO: error handling for table lookup failure */
-    // get major chemistry table from database
-    val majorChemistry = db.getTable(Tables.DbTableInfo.MajorChemistry.name)
-
-    // get minor chemistry table from database
-    val minorChemistry = db.getTable(Tables.DbTableInfo.MinorChemistry.name)
-
-    // get chemistry sample info table from database
-    val chemSampleInfo = db.getTable(Tables.DbTableInfo.ChemistrySampleInfo.name)
 
     def getSamples(t: Table): Set[(String,String)] =
       t.foldLeft(Set.empty[(String,String)]) {
@@ -107,12 +124,13 @@ object DBFiller {
 
     val tableColumns =
       (List(majorChemistry, minorChemistry) map { t =>
-        t -> t.getColumns.map(_.getName).toSeq
-      }).toMap
+         t -> t.getColumns.map(_.getName).toSeq
+       }).toMap
 
     implicit val sheetSource = xls.Sheet.source
 
-    val recordSource: AnalysisReport.Source[TState[SState]] = AnalysisReport.source
+    val recordSource: AnalysisReport.Source[TState[SState]] =
+      AnalysisReport.source
 
     val dbRecordSource =
       recordSource map { case (i@_, vrec@_) =>
@@ -294,8 +312,10 @@ object DBFiller {
   private def showValidationErrors(
     writeln: String => Unit,
     errs: NonEmptyList[(Int, Error)]): Unit = {
-    /* FIXME: error messages */
-    val messages = errs.unwrap.sortBy(_._1) map { case (_, err) => err.message }
+    val messages =
+      errs.unwrap.sortBy(_._1) map { case (i@_, err@_) =>
+        s"ERROR: in XLS file, row $i: " + err.message
+      }
 
     writeln(messages.mkString("\n"))
   }
@@ -316,7 +336,7 @@ object DBFiller {
       db.flush()
 
       writeln(
-          s"Added ${records.length} records with the following sample point IDs to database:")
+        s"Added ${records.length} records with the following sample point IDs to database:")
 
       writeln(records.map(_.samplePointId).distinct.sorted.mkString("\n"))
 
@@ -348,7 +368,7 @@ object DBFiller {
 
   private def meetsStandards(record: DbRecord): Boolean = {
     Tables.standards.get(Tables.DbTableInfo.baseAnalyte(record.analyte)) map {
-      case (lo, hi) => lo <= record.sampleValue && record.sampleValue <= hi 
+      case (lo, hi) => lo <= record.sampleValue && record.sampleValue <= hi
     } getOrElse true
   }
 

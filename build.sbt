@@ -13,7 +13,7 @@ version := "0.11.0"
 organization := "org.truffulatree"
 
 licenses := Seq(
-  "Mozilla Public License Version 2.0" -> url("https://mozilla.org/MPL/2.0/"))
+    "Mozilla Public License Version 2.0" -> url("https://mozilla.org/MPL/2.0/"))
 
 homepage := Some(url("https://github.com/mpokorny/h2odb"))
 
@@ -22,36 +22,36 @@ scalaVersion := "2.11.8"
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
 
 libraryDependencies ++= Seq(
-  "org.typelevel" %% "cats" % "0.6.0",
-  "org.scala-lang.modules" %% "scala-swing" % "1.0.1",
-  "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
-  "org.slf4j" % "slf4j-api" % "1.7.5",
-  "ch.qos.logback" % "logback-classic" % "1.1.7",
-  "org.apache.poi" % "poi" % "3.14",
-  "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0",
-  "org.scala-sbt" % "launcher-interface" % "0.13.5" % "provided")
+    "org.typelevel" %% "cats" % "0.6.0",
+    "org.scala-lang.modules" %% "scala-swing" % "1.0.1",
+    "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
+    "org.slf4j" % "slf4j-api" % "1.7.5",
+    "ch.qos.logback" % "logback-classic" % "1.1.7",
+    "org.apache.poi" % "poi" % "3.14",
+    "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0",
+    "org.scala-sbt" % "launcher-interface" % "0.13.5" % "provided")
 
 resolvers ++= Seq(
-  "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
-  "releases"  at "https://oss.sonatype.org/content/repositories/releases")
+    "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
+    "releases"  at "https://oss.sonatype.org/content/repositories/releases")
 
 resolvers <+= sbtResolver
 
 scalacOptions ++= Seq(
-  "-deprecation",
-  "-unchecked",
-  "-explaintypes",
-  "-Xlint")
+    "-deprecation",
+    "-unchecked",
+    "-explaintypes",
+    "-Xlint")
 
 publishMavenStyle := true
 
 publishTo <<= version { (v: String) =>
-  val nexus = "https://oss.sonatype.org/"
-  if (v.trim.endsWith("SNAPSHOT"))
-    Some("snapshots" at nexus + "content/repositories/snapshots")
-  else
-    Some("staging"  at nexus + "service/local/staging/deploy/maven2")
-}
+    val nexus = "https://oss.sonatype.org/"
+    if (v.trim.endsWith("SNAPSHOT"))
+      Some("snapshots" at nexus + "content/repositories/snapshots")
+    else
+      Some("staging"  at nexus + "service/local/staging/deploy/maven2")
+  }
 
 credentials += Credentials(Path.userHome / ".sbt" / "sonatype.txt")
 

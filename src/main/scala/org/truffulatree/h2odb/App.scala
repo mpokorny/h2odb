@@ -6,17 +6,20 @@
 //
 package org.truffulatree.h2odb
 
+import java.awt.{Cursor, Dimension, Font}
+import java.awt.datatransfer.StringSelection
+import java.io.{File, FileInputStream}
+
+import scala.concurrent.SyncVar
 import scala.swing._
 import scala.swing.event._
-import javax.swing.filechooser.FileNameExtensionFilter
-import javax.swing.JPopupMenu
-import java.awt.{ Cursor, Dimension, Font }
-import java.awt.datatransfer.{ StringSelection }
-import scala.concurrent.SyncVar
-import java.io.{ File, FileInputStream }
-import org.slf4j.LoggerFactory
+
+import cats.std.list._
 import com.healthmarketscience.jackcess.DatabaseBuilder
+import javax.swing.JPopupMenu
+import javax.swing.filechooser.FileNameExtensionFilter
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
+import org.slf4j.LoggerFactory
 
 /** Add xsbti.MainResult return value to SimpleSwingApplication.main().
   */
@@ -214,9 +217,12 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
       }
 
     try {
-      val xls = openFile(
+      val (xlsFile, xls) = openFile(
         xlsPath,
-        (s: String) => new HSSFWorkbook(new FileInputStream(s)),
+        (s: String) => {
+          val fis = new FileInputStream(s)
+          (fis, new HSSFWorkbook(fis))
+        },
         "an Excel file")
 
       val db = openFile(
@@ -274,7 +280,20 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         }
       }
 
-      DBFiller((s: String) => resultsFrame.textArea.append(s + "\n"), xls, db)
+      /* for Access db only, yet */
+      mdb.DbFiller.getTables(db).fold(
+        errs => throw new OpenException(errs.unwrap.mkString("\n")),
+        tables => {
+          val filler = new mdb.DBFiller(db, tables)
+
+          filler.getFromWorkbook(
+            (s: String) => resultsFrame.textArea.append(s + "\n"),
+            xls)
+
+          xlsFile.close
+
+          db.close
+        })
 
       if (resultsFrame.size == new Dimension(0, 0)) resultsFrame.pack()
       resultsFrame.visible = true

@@ -107,7 +107,7 @@ trait Tables {
 
   /** Map from XLS "Param" values to DB "AnalysisMethod" values
     */
-  val method = Map(
+  val methodMap = Map(
       Params.alkalinity  -> "As CaCO3",
       Params.bicarbonate -> "Alkalinity as HCO3",
       Params.tds         -> "Calculation",
@@ -115,7 +115,7 @@ trait Tables {
 
   /** Map from XLS "Results_Units" values to DB "Units" values, by "Param"
     */
-  val units = Map(
+  val unitsMap = Map(
       Params.anions      -> "epm",
       Params.cations     -> "epm",
       Params.hardness    -> "mg/L",

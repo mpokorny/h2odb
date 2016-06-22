@@ -21,9 +21,7 @@ final case class DbRecord(
   sampleValue: Float,
   symbol: Option[String],
   table: String,
-  units: String) extends h2odb.DbRecord {
-
-  import Tables.dbInfo
+  units: String) extends h2odb.DbRecord with Tables {
 
   def get(col: String): Option[Any] = col match {
       case dbInfo.analysesAgency =>

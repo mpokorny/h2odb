@@ -15,14 +15,12 @@ import com.typesafe.scalalogging.Logger
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import org.slf4j.LoggerFactory
 
-abstract class DBFiller[A <: DbRecord, B <: Tables] {
+abstract class DBFiller[A <: DbRecord] extends Tables {
 
   protected val logger = Logger(LoggerFactory.getLogger(getClass.getName.init))
 
   import xls.Table.{State => TState}
   import xls.Sheet.{State => SState}
-
-  val tables: B
 
   type DbRecordAcc = Map[(String, String), A]
 
@@ -111,12 +109,12 @@ abstract class DBFiller[A <: DbRecord, B <: Tables] {
 
   private[this] def validateParam(rec: AnalysisRecord):
       Validated[Error, AnalysisRecord] =
-    if (tables.analytes.contains(rec.parameter)) Validated.valid(rec)
+    if (analytes.contains(rec.parameter)) Validated.valid(rec)
     else Validated.invalid(MissingParamConversion(rec.parameter))
 
   private[this] def validateTest(rec: AnalysisRecord):
       Validated[Error, AnalysisRecord] =
-    if (tables.testPriority.get(rec.parameter).
+    if (testPriority.get(rec.parameter).
           map(_.exists(_.findFirstIn(rec.test).isDefined)).
           getOrElse(true))
       Validated.valid(rec)
@@ -200,7 +198,7 @@ abstract class DBFiller[A <: DbRecord, B <: Tables] {
   }
 
   private[this] def meetsStandards(record: A): Boolean = {
-    tables.standards.get(tables.dbInfo.baseAnalyte(record.analyte)) map {
+    standards.get(dbInfo.baseAnalyte(record.analyte)) map {
       case (lo, hi) => lo <= record.sampleValue && record.sampleValue <= hi
     } getOrElse true
   }

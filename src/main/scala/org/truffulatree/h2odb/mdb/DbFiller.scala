@@ -17,15 +17,13 @@ import com.healthmarketscience.jackcess.{Database, Table}
 import org.truffulatree.h2odb
 
 class DBFiller(val db: Database, dbTables: Map[String, Table])
-    extends h2odb.DBFiller[DbRecord, Tables.type] {
+    extends h2odb.DBFiller[DbRecord] with Tables {
 
-  val tables = Tables
+  val majorChemistry = dbTables(dbInfo.majorChemistry)
 
-  val majorChemistry = dbTables(tables.dbInfo.majorChemistry)
+  val minorChemistry = dbTables(dbInfo.minorChemistry)
 
-  val minorChemistry = dbTables(tables.dbInfo.minorChemistry)
-
-  val chemSampleInfo = dbTables(tables.dbInfo.chemistrySampleInfo)
+  val chemSampleInfo = dbTables(dbInfo.chemistrySampleInfo)
 
   /** All (samplePointId, analyte) pairs from major and minor chemistry tables
     */
@@ -33,8 +31,8 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
     def getSamples(t: Table): Set[(String,String)] =
       t.foldLeft(Set.empty[(String,String)]) {
         case (acc, row) =>
-          Option(row.get(tables.dbInfo.analyte)) map { analyte =>
-            acc + ((row.get(tables.dbInfo.samplePointId).toString,
+          Option(row.get(dbInfo.analyte)) map { analyte =>
+            acc + ((row.get(dbInfo.samplePointId).toString,
                     analyte.toString))
           } getOrElse acc
       }
@@ -53,8 +51,8 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
     */
   private[this] val guids: Map[String, String] =
     (chemSampleInfo map { row =>
-       row(tables.dbInfo.samplePointId).toString ->
-         row(tables.dbInfo.samplePointGUID).toString
+       row(dbInfo.samplePointId).toString ->
+         row(dbInfo.samplePointGUID).toString
     }).toMap
 
   /** Convert xls records to database table format
@@ -90,32 +88,32 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
         guids.get(record.samplePointId), 
         InvalidSamplePointId(record.samplePointId))
 
-    val dbTable = Tables.chemistryTable(record.parameter)
+    val dbTable = chemistryTable(record.parameter)
 
     val dbPriority =
-      Tables.testPriority.get(record.parameter).
+      testPriority.get(record.parameter).
         map(_.indexWhere(_.findFirstIn(record.test).isDefined)).
         getOrElse(0)
 
-    val dbUnits = Tables.units.getOrElse(record.parameter, record.units)
+    val dbUnits = unitsMap.getOrElse(record.parameter, record.units)
 
     val dbAnalyte =
       if (record.total.filter(_.trim.length > 0).isDefined) {
-        tables.dbInfo.totalAnalyte(Tables.analytes(record.parameter))
+        dbInfo.totalAnalyte(analytes(record.parameter))
       } else {
-        Tables.analytes(record.parameter)
+        analytes(record.parameter)
       }
 
     val dbAnalysisMethod =
       record.method +
-        Tables.method.get(record.parameter).map(", " + _).getOrElse("")
+        methodMap.get(record.parameter).map(", " + _).getOrElse("")
 
     Apply[ValidatedNel[Error, ?]].map2(
       vDbSampleValue.toValidatedNel,
       vDbSamplePointGUID.toValidatedNel) {
       case (dbSampleValue@_, dbSamplePointGUID@_) =>
         DbRecord(
-          analysesAgency = tables.dbInfo.analysesAgencyDefault,
+          analysesAgency = dbInfo.analysesAgencyDefault,
           analysisDate = record.analysisTime,
           analysisMethod = dbAnalysisMethod,
           analyte = dbAnalyte,
@@ -126,7 +124,7 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
           samplePointId = record.samplePointId,
           sampleValue = dbSampleValue,
           symbol = dbSymbol,
-          table = Tables.chemistryTable(record.parameter),
+          table = chemistryTable(record.parameter),
           units = dbUnits)
     }
   }
@@ -146,7 +144,7 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
   }
 }
 
-object DbFiller {
+object DbFiller extends Tables {
   def getTables(db: Database): Xor[NonEmptyList[String], Map[String, Table]] = {
     
     def getTable(name: String): Xor[String, Table] =
@@ -155,14 +153,14 @@ object DbFiller {
         s"Failed to find '${name}' table in database")
 
     (Apply[ValidatedNel[String, ?]].map3(
-      getTable(Tables.dbInfo.majorChemistry).toValidatedNel,
-      getTable(Tables.dbInfo.minorChemistry).toValidatedNel,
-      getTable(Tables.dbInfo.chemistrySampleInfo).toValidatedNel) {
+      getTable(dbInfo.majorChemistry).toValidatedNel,
+      getTable(dbInfo.minorChemistry).toValidatedNel,
+      getTable(dbInfo.chemistrySampleInfo).toValidatedNel) {
       case (major, minor, info) =>
         Map(
-          Tables.dbInfo.majorChemistry -> major,
-          Tables.dbInfo.minorChemistry -> minor,
-          Tables.dbInfo.chemistrySampleInfo -> info)
+          dbInfo.majorChemistry -> major,
+          dbInfo.minorChemistry -> minor,
+          dbInfo.chemistrySampleInfo -> info)
     }).toXor
   }
 }

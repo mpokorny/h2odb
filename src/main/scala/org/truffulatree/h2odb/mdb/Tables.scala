@@ -8,7 +8,7 @@ package org.truffulatree.h2odb.mdb
 
 import org.truffulatree.h2odb
 
-object Tables extends h2odb.Tables {
+trait Tables extends h2odb.Tables {
 
   val dbInfo =
     new DbInfo {

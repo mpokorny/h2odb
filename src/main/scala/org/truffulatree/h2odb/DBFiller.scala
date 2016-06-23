@@ -78,7 +78,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
             Xor.right[NonEmptyList[(Int, Error)], DbRecordAcc](Map.empty))) {
           case (r@_, evr@_) => evr map (vr => accumulateValidatedDbRecord(vr, r))
         }
-    
+
     vDbRecords.value.
       fold(
         showValidationErrors(writeln, _),
@@ -116,11 +116,12 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
       Validated[Error, AnalysisRecord] =
     if (testPriority.get(rec.parameter).
           map(_.exists(_.findFirstIn(rec.test).isDefined)).
-          getOrElse(true))
+          getOrElse(true)) {
       Validated.valid(rec)
-    else
+    } else {
       Validated.invalid(
         InvalidTestDescription(rec.samplePointId, rec.parameter, rec.test))
+    }
 
   private[this] def validateAnalysisRecord(rec: AnalysisRecord):
       ValidatedNel[Error, AnalysisRecord] = {

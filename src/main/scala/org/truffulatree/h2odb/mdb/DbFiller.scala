@@ -1,4 +1,4 @@
-// Copyright 2013, Martin Pokorny <martin@truffulatree.org>
+// Copyright 2016, Martin Pokorny <martin@truffulatree.org>
 //
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
@@ -53,7 +53,7 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
     (chemSampleInfo map { row =>
        row(dbInfo.samplePointId).toString ->
          row(dbInfo.samplePointGUID).toString
-    }).toMap
+     }).toMap
 
   /** Convert xls records to database table format
     *
@@ -81,21 +81,15 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
         (sv, Some("<"))
       }
 
-    val dbPointId = record.samplePointId.init
-
     val vDbSamplePointGUID =
       Validated.fromOption(
-        guids.get(record.samplePointId), 
+        guids.get(record.samplePointId),
         InvalidSamplePointId(record.samplePointId))
-
-    val dbTable = chemistryTable(record.parameter)
 
     val dbPriority =
       testPriority.get(record.parameter).
         map(_.indexWhere(_.findFirstIn(record.test).isDefined)).
         getOrElse(0)
-
-    val dbUnits = unitsMap.getOrElse(record.parameter, record.units)
 
     val dbAnalyte =
       if (record.total.filter(_.trim.length > 0).isDefined) {
@@ -118,14 +112,14 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
           analysisMethod = dbAnalysisMethod,
           analyte = dbAnalyte,
           labId = record.sampleNumber,
-          pointId = dbPointId,
+          pointId = record.samplePointId.init,
           priority = dbPriority,
           samplePointGUID = dbSamplePointGUID,
           samplePointId = record.samplePointId,
           sampleValue = dbSampleValue,
           symbol = dbSymbol,
           table = chemistryTable(record.parameter),
-          units = dbUnits)
+          units = unitsMap.getOrElse(record.parameter, record.units))
     }
   }
 
@@ -146,21 +140,21 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
 
 object DbFiller extends Tables {
   def getTables(db: Database): Xor[NonEmptyList[String], Map[String, Table]] = {
-    
+
     def getTable(name: String): Xor[String, Table] =
       Xor.fromOption(
         Option(db.getTable(name)),
         s"Failed to find '${name}' table in database")
 
     (Apply[ValidatedNel[String, ?]].map3(
-      getTable(dbInfo.majorChemistry).toValidatedNel,
-      getTable(dbInfo.minorChemistry).toValidatedNel,
-      getTable(dbInfo.chemistrySampleInfo).toValidatedNel) {
-      case (major, minor, info) =>
-        Map(
-          dbInfo.majorChemistry -> major,
-          dbInfo.minorChemistry -> minor,
-          dbInfo.chemistrySampleInfo -> info)
-    }).toXor
+       getTable(dbInfo.majorChemistry).toValidatedNel,
+       getTable(dbInfo.minorChemistry).toValidatedNel,
+       getTable(dbInfo.chemistrySampleInfo).toValidatedNel) {
+       case (major, minor, info) =>
+         Map(
+           dbInfo.majorChemistry -> major,
+           dbInfo.minorChemistry -> minor,
+           dbInfo.chemistrySampleInfo -> info)
+     }).toXor
   }
 }

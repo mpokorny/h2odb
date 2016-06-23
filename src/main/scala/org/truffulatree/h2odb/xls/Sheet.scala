@@ -26,10 +26,8 @@ object Sheet {
           case Cell.CELL_TYPE_STRING =>
             CellString(cell.getStringCellValue)
           case Cell.CELL_TYPE_NUMERIC =>
-            if (DateUtil.isCellDateFormatted(cell))
-              CellDate(cell.getDateCellValue)
-            else
-              CellNumeric(cell.getNumericCellValue)
+            if (DateUtil.isCellDateFormatted(cell)) CellDate(cell.getDateCellValue)
+            else CellNumeric(cell.getNumericCellValue)
           case Cell.CELL_TYPE_BOOLEAN =>
             CellBoolean(cell.getBooleanCellValue)
           case Cell.CELL_TYPE_BLANK =>

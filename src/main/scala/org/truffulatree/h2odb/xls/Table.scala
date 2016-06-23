@@ -28,15 +28,16 @@ object Table {
       templateValue map { setValue =>
         val vCell: ValidatedNel[Error, CellValue] =
           /* allow blank values everywhere to support optional values */
-          if (cellValue.hasTypeOf(setValue) || cellValue.hasTypeOf(CellBlank))
+          if (cellValue.hasTypeOf(setValue) || cellValue.hasTypeOf(CellBlank)) {
             Validated.valid(cellValue)
-          else
+          } else {
             Validated.invalidNel(CellType(colIdx, setValue.typeDescription))
+          }
 
         (Some(setValue), vCell)
       } getOrElse {
         // set template for this cell only if cell is not blank
-        val setValue: Option[CellValue] = 
+        val setValue: Option[CellValue] =
           if (cellValue.hasTypeOf(CellBlank)) None
           else Some(cellValue)
 

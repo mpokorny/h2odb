@@ -58,40 +58,27 @@ object AnalysisRecord {
     def requiredStringValue(name: String): ValidatedNel[Error, String] =
       required(fieldValue[String])(name) { case CellString(s@_) => s }
 
-    /* val requiredStringValue = required(_: String)(stringValue)
-     * 
-     * def requiredFieldValue[A](fn: PartialFunction[CellValue, A]) =
-     *   required(_: String)(fieldValue[A](_)(fn)) */
-
-    val vParameter = requiredStringValue("Param")
-    val vTest = requiredStringValue("Test")
-    val vSamplePointId = requiredStringValue("SamplePointID")
-    val vReportedND = requiredStringValue("ReportedND")
     val vLowerLimit = fieldValue("LowerLimit") {
         case CellNumeric(n@_) => n.toFloat
       }
     val vDilution = required[Float](fieldValue)("Dilution") {
         case CellNumeric(n@_) => n.toFloat
       }
-    val vMethod = requiredStringValue("Method")
-    val vTotal = stringValue("Total")
-    val vUnits = requiredStringValue("Results_Units")
-    val vSampleNumber = requiredStringValue("SampleNumber")
     val vAnalysisTime = required[Date](fieldValue)("AnalysisTime") {
         case CellDate(d@_) => d
       }
 
     Apply[ValidatedNel[Error, ?]].map11(
-      vParameter,
-      vTest,
-      vSamplePointId,
-      vReportedND,
+      requiredStringValue("Param"),
+      requiredStringValue("Test"),
+      requiredStringValue("SamplePointID"),
+      requiredStringValue("ReportedND"),
       vLowerLimit,
       vDilution,
-      vMethod,
-      vTotal,
-      vUnits,
-      vSampleNumber,
+      requiredStringValue("Method"),
+      stringValue("Total"),
+      requiredStringValue("Results_Units"),
+      requiredStringValue("SampleNumber"),
       vAnalysisTime) {
       case (param@_, test@_, spid@_, rnd@_, ll@_, dil@_, mth@_, tot@_, un@_, num@_, at@_) =>
         AnalysisRecord(param, test, spid, rnd, ll, dil, mth, tot, un, num, at)

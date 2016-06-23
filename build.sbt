@@ -22,14 +22,16 @@ scalaVersion := "2.11.8"
 addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
 
 libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats" % "0.6.0",
-    "org.scala-lang.modules" %% "scala-swing" % "1.0.1",
-    "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
-    "org.slf4j" % "slf4j-api" % "1.7.5",
     "ch.qos.logback" % "logback-classic" % "1.1.7",
-    "org.apache.poi" % "poi" % "3.14",
+    "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
+    "com.typesafe.play" %% "anorm" % "2.5.0",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.4.0",
-    "org.scala-sbt" % "launcher-interface" % "0.13.5" % "provided")
+    jdbc,
+    "org.apache.poi" % "poi" % "3.14",
+    "org.scala-lang.modules" %% "scala-swing" % "2.0.0-M2",
+    "org.scala-sbt" % "launcher-interface" % "0.13.5" % "provided",
+    "org.slf4j" % "slf4j-api" % "1.7.5",
+    "org.typelevel" %% "cats" % "0.6.0")
 
 resolvers ++= Seq(
     "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",
@@ -64,14 +66,14 @@ pomExtra := (
   <scm>
     <url>git@github.com:mpokorny/h2odb.git</url>
     <connection>scm:git:git@github.com:mpokorny/h2odb.git</connection>
-    </scm>
-    <developers>
+  </scm>
+  <developers>
     <developer>
-    <id>martin</id>
-    <name>Martin Pokorny</name>
-    <email>martin@truffulatree.org</email>
+      <id>martin</id>
+      <name>Martin Pokorny</name>
+      <email>martin@truffulatree.org</email>
     <timezone>America/Denver</timezone>
     </developer>
-    </developers>)
+  </developers>)
 
 useGpg := true

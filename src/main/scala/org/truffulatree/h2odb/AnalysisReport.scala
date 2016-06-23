@@ -30,7 +30,7 @@ object AnalysisReport {
 
   final case class Doc[S, A](source: StateT[Option, S, A], initial: S)
 
-  implicit def DocFoldable[S]: Foldable[Doc[S, ?]] =
+  implicit def docFoldable[S]: Foldable[Doc[S, ?]] =
     new Foldable[Doc[S, ?]] {
 
       override def foldLeft[A, B](fa: Doc[S, A], b: B)(f: (B, A) => B): B = {

@@ -69,7 +69,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
             leftMap(_.map((i, _)))
       }
 
-    implicit val docFoldable = AnalysisReport.DocFoldable[SState]
+    implicit val docFoldable = AnalysisReport.docFoldable[SState]
 
     val vDbRecords =
       AnalysisReport.Doc(dbRecordSource, sheet).
@@ -163,9 +163,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
       logger.debug(records.mkString("\n"))
 
       /* add rows to database */
-      records foreach addToTable
-
-      dbFlush()
+      addToDb(records)
 
       writeln(
         s"Added ${records.length} records with the following sample point IDs to database:")
@@ -208,13 +206,9 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
     */
   protected def convertAnalysisRecord(record: AnalysisRecord): ValidatedNel[Error, A]
 
-  /** Flush the database
+  /** Add records to database
     */
-  protected def dbFlush(): Unit
-
-  /** Add record to database
-    */
-  protected def addToTable(record: A): Unit
+  protected def addToDb(records: Seq[A]): Unit
 
   sealed trait Error {
     def message: String

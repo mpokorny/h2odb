@@ -4,56 +4,57 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 //
-package org.truffulatree.h2odb.mdb
+package org.truffulatree.h2odb.sql
 
-import scala.collection.JavaConversions._
+import java.sql.Connection
 
+import anorm._
 import cats._
 import cats.data._
 import cats.std.list._
 import cats.syntax.option._
-import cats.syntax.foldable._
-import com.healthmarketscience.jackcess.{Database, Table}
 import org.truffulatree.h2odb
 
-class DBFiller(val db: Database, dbTables: Map[String, Table])
+class DBFiller(implicit val connection: Connection)
     extends h2odb.DBFiller[DbRecord] with Tables {
-
-  val majorChemistry = dbTables(dbInfo.majorChemistry)
-
-  val minorChemistry = dbTables(dbInfo.minorChemistry)
-
-  val chemSampleInfo = dbTables(dbInfo.chemistrySampleInfo)
 
   /** All (samplePointId, analyte) pairs from major and minor chemistry tables
     */
   protected val existingSamples: Set[(String,String)] = {
-    def getSamples(t: Table): Set[(String,String)] =
-      t.foldLeft(Set.empty[(String,String)]) {
-        case (acc, row) =>
-          Option(row.get(dbInfo.analyte)) map { analyte =>
-            acc + ((row.get(dbInfo.samplePointId).toString,
-                    analyte.toString))
-          } getOrElse acc
+    val parser =
+      SqlParser.str(dbInfo.samplePointId) ~ SqlParser.str(dbInfo.analyte) map {
+        case samplePointId ~ analyte => (samplePointId -> analyte)
       }
 
-    List(majorChemistry, minorChemistry) map (getSamples _) reduceLeft (_ ++ _)
-  }
+    def getSamples(table: String): Set[(String,String)] = {
+      val pairs = SQL"""
+        SELECT c.#${dbInfo.samplePointId}, c.#${dbInfo.analyte}
+        FROM #$table c"""
+        .as(parser.*)
 
-  /** Map from major/minor chemistry table name to table column names
-    */
-  private[this] val tableColumns: Map[String, Seq[String]] =
-    (List(majorChemistry, minorChemistry) map { t =>
-       t.getName -> t.getColumns.map(_.getName).toSeq
-     }).toMap
+      pairs.toSet
+    }
+
+    List(dbInfo.majorChemistry, dbInfo.minorChemistry).
+      map(getSamples _).
+      reduceLeft(_ ++ _)
+  }
 
   /** Map from samplePointId to samplePointGUID
     */
-  private[this] val guids: Map[String, String] =
-    (chemSampleInfo map { row =>
-       row(dbInfo.samplePointId).toString ->
-         row(dbInfo.samplePointGUID).toString
-     }).toMap
+  private[this] val guids: Map[String, String] = {
+    val parser =
+      SqlParser.str(dbInfo.samplePointId) ~ SqlParser.str(dbInfo.samplePointGUID) map {
+        case samplePointId ~ samplePointGUID => (samplePointId -> samplePointGUID)
+      }
+
+    val pairs = SQL"""
+      SELECT i.#${dbInfo.samplePointId}, i.#${dbInfo.samplePointGUID}
+      FROM #${dbInfo.chemistrySampleInfo}"""
+      .as(parser.*)
+
+    pairs.toMap
+  }
 
   /** Convert xls records to database table format
     *
@@ -124,41 +125,65 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
   }
 
   override def addToDb(records: Seq[DbRecord]): Unit = {
-    records foreach addToTable
+    records.groupBy(_.table) foreach { case (table, recs) =>
 
-    db.flush()
+      val namedParameters = recs map toNamedParameters
+
+      logger.debug(namedParameters.map(_.toString + " -> " + table).mkString("\n"))
+
+      addToTable(table, namedParameters)
+    }
   }
 
-  protected def addToTable(record: DbRecord): Unit = {
-    /* TODO: error handling when table lookup fails? */
-    val colNames = tableColumns.getOrElse(record.table, Seq.empty)
+  private[this] def addToTable(
+    table: String,
+    records: Seq[Seq[NamedParameter]]): Unit = {
+    val insert = s"""
+        INSERT INTO $table (
+          ${dbInfo.analysesAgency},
+          ${dbInfo.analysisDate},
+          ${dbInfo.analysisMethod},
+          ${dbInfo.analyte},
+          ${dbInfo.labId},
+          ${dbInfo.pointId},
+          ${dbInfo.samplePointGUID},
+          ${dbInfo.samplePointId},
+          ${dbInfo.sampleValue},
+          ${dbInfo.symbol},
+          ${dbInfo.units})
+        VALUES (
+          {${dbInfo.analysesAgency}},
+          {${dbInfo.analysisDate}},
+          {${dbInfo.analysisMethod}},
+          {${dbInfo.analyte}},
+          {${dbInfo.labId}},
+          {${dbInfo.pointId}},
+          {${dbInfo.samplePointGUID}},
+          {${dbInfo.samplePointId}},
+          {${dbInfo.sampleValue}},
+          {${dbInfo.symbol}},
+          {${dbInfo.units}})"""
 
-    val row =
-      colNames map (col => record.get(col).getOrElse(null).asInstanceOf[Object])
+    records match {
+      case Seq(head@_, tail@_*) =>
+        BatchSql(insert, head, tail:_*).execute()
 
-    logger.debug(s"$row -> ${record.table}")
-
-    dbTables(record.table).addRow(row:_*)
+      case Seq() =>
+    }
   }
-}
 
-object DbFiller extends Tables {
-  def getTables(db: Database): Xor[NonEmptyList[String], Map[String, Table]] = {
 
-    def getTable(name: String): Xor[String, Table] =
-      Xor.fromOption(
-        Option(db.getTable(name)),
-        s"Failed to find '${name}' table in database")
-
-    (Apply[ValidatedNel[String, ?]].map3(
-       getTable(dbInfo.majorChemistry).toValidatedNel,
-       getTable(dbInfo.minorChemistry).toValidatedNel,
-       getTable(dbInfo.chemistrySampleInfo).toValidatedNel) {
-       case (major, minor, info) =>
-         Map(
-           dbInfo.majorChemistry -> major,
-           dbInfo.minorChemistry -> minor,
-           dbInfo.chemistrySampleInfo -> info)
-     }).toXor
-  }
+  protected def toNamedParameters(record: DbRecord): Seq[NamedParameter] =
+    Seq[NamedParameter](
+      dbInfo.analysesAgency -> record.analysesAgency,
+      dbInfo.analysisDate -> record.analysisDate,
+      dbInfo.analysisMethod -> record.analysisMethod,
+      dbInfo.analyte -> record.analyte,
+      dbInfo.labId -> record.labId,
+      dbInfo.pointId -> record.pointId,
+      dbInfo.samplePointGUID -> record.samplePointGUID,
+      dbInfo.samplePointId -> record.samplePointId,
+      dbInfo.sampleValue -> record.sampleValue,
+      dbInfo.symbol -> record.symbol,
+      dbInfo.units -> dbInfo.units)
 }

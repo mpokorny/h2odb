@@ -61,8 +61,6 @@ class DBFiller(implicit val connection: Connection)
     * Convert a (single) [[AnalysisRecord]] into a [[DbRecord]]. The resulting
     * [[DbRecord]] is ready for addition to the appropriate database table.
     *
-    * @param major   "Major chemistry" database table
-    * @param minor   "Minor chemistry" database table
     * @return        [[DbRecord]] derived from record
     */
   override protected def convertAnalysisRecord(record: h2odb.AnalysisRecord):

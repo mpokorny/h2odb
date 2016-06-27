@@ -9,13 +9,13 @@ package org.truffulatree.h2odb
 import java.awt.{Cursor, Dimension, Font}
 import java.awt.datatransfer.StringSelection
 import java.io.{File, FileInputStream}
+import java.sql.SQLException
 
 import scala.concurrent.SyncVar
 import scala.swing._
 import scala.swing.event._
 
-import cats.std.list._
-import com.healthmarketscience.jackcess.DatabaseBuilder
+import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
 import javax.swing.filechooser.FileNameExtensionFilter
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
@@ -32,12 +32,14 @@ trait SwingAppMain {
     */
   def apply(args: Array[String]): xsbti.MainResult = {
     main(args)
+
     new Exit(exitVal.take())
   }
 
   override def quit(): Unit = {
     shutdown()
-      exitVal.put(0)
+
+    exitVal.put(0)
   }
 }
 
@@ -106,7 +108,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
     val textField = new TextField(textFieldWidth) {
         tooltip = panel.tooltip
-          editable = false
+
+        editable = false
       }
 
     val selectButton = new SelectButton(buttonText, fileFilter, textField)
@@ -140,7 +143,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
       val goButton = new Button {
           text = "Go"
-            enabled = false
+
+          enabled = false
         }
 
       contents += goButton
@@ -160,17 +164,39 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
           "Select report",
           new FileNameExtensionFilter("Excel file", "xls"))
 
-      val dbPanel = new FileSelectorPanel(
-          "Database (Access file)",
-          "Select database",
-          new FileNameExtensionFilter("Access database", "mdb"))
+      val dbConnectionParameters = new GridPanel(5, 2) {
+          def inputField(name: String, fieldConstructor: Int => TextField):
+              TextField = {
+            val fieldWidth = 20
+
+            val label = new Label(name)
+
+            label.horizontalAlignment = Alignment.Right
+
+            contents += label
+
+            val field = fieldConstructor(fieldWidth)
+
+            contents += field
+
+            field
+          }
+
+          val usernameField = inputField("Username", new TextField(_))
+
+          val passwordField = inputField("Password", new PasswordField(_))
+
+          val serverNameField = inputField("Server hostname",  new TextField(_))
+
+          val portField = inputField("Port", new TextField(_))
+
+          val databaseNameField = inputField("Database name",  new TextField(_))
+        }
 
       contents = new BoxPanel(Orientation.Vertical) {
           contents += xlsPanel
 
-          contents += dbPanel
-
-          contents += buttonPanel
+          contents += dbConnectionParameters
 
           border = Swing.EmptyBorder(30, 30, 10, 30)
         }
@@ -181,14 +207,28 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
         case ButtonClicked(b) if b == buttonPanel.goButton => {
             buttonPanel.goButton.enabled = false
+
             val xlsPath = xlsPanel.selectButton.field.text
-            val dbPath = dbPanel.selectButton.field.text
+
+            val username = dbConnectionParameters.usernameField.text
+
+            val password = dbConnectionParameters.passwordField.text
+
+            val serverName = dbConnectionParameters.serverNameField.text
+
+            val port = dbConnectionParameters.portField.text.toInt
+
+            val databaseName = dbConnectionParameters.databaseNameField.text
+
             val origCursor = cursor
-              cursor = Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)
-              runFiller(xlsPath, dbPath)
-              xlsPanel.reset()
-              dbPanel.reset()
-              cursor = origCursor
+
+            cursor = Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR)
+
+            runFiller(xlsPath, username, password, serverName, port, databaseName)
+
+            xlsPanel.reset()
+
+            cursor = origCursor
           }
 
         case ButtonClicked(b: SelectButton) => {
@@ -201,12 +241,20 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
         case ValueChanged(f: TextField)
             if (f == xlsPanel.selectButton.field ||
-                  f == dbPanel.selectButton.field) => {
-              if (!(xlsPanel.selectButton.field.text.isEmpty ||
-                      dbPanel.selectButton.field.text.isEmpty)) {
-                buttonPanel.goButton.enabled = true
-              } else {
+                  f == dbConnectionParameters.usernameField ||
+                  f == dbConnectionParameters.passwordField ||
+                  f == dbConnectionParameters.serverNameField ||
+                  f == dbConnectionParameters.portField ||
+                  f == dbConnectionParameters.databaseNameField) => {
+              if (xlsPanel.selectButton.field.text.isEmpty ||
+                    dbConnectionParameters.usernameField.text.isEmpty ||
+                    dbConnectionParameters.passwordField.text.isEmpty ||
+                    dbConnectionParameters.serverNameField.text.isEmpty ||
+                    dbConnectionParameters.portField.text.isEmpty ||
+                    dbConnectionParameters.databaseNameField.text.isEmpty) {
                 buttonPanel.goButton.enabled = false
+              } else {
+                buttonPanel.goButton.enabled = true
               }
             }
       }
@@ -217,14 +265,26 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
       listenTo(xlsPanel.selectButton)
 
-      listenTo(dbPanel.selectButton)
-
       listenTo(xlsPanel.selectButton.field)
 
-      listenTo(dbPanel.selectButton.field)
+      listenTo(dbConnectionParameters.usernameField)
+
+      listenTo(dbConnectionParameters.passwordField)
+
+      listenTo(dbConnectionParameters.serverNameField)
+
+      listenTo(dbConnectionParameters.portField)
+
+      listenTo(dbConnectionParameters.databaseNameField)
     }
 
-  def runFiller(xlsPath: String, dbPath: String): Unit = {
+  def runFiller(
+    xlsPath: String,
+    username: String,
+    password: String,
+    serverName: String,
+    port: Int,
+    databaseName: String): Unit = {
 
     class OpenException(m: String) extends Exception(m)
 
@@ -241,15 +301,22 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
           xlsPath,
           (s: String) => {
             val fis = new FileInputStream(s)
-                                         (fis, new HSSFWorkbook(fis))
+
+            (fis, new HSSFWorkbook(fis))
           },
           "an Excel file")
 
-      val db = openFile(
-          dbPath,
-          (s: String) => (new DatabaseBuilder(new File(s))).setAutoSync(false).
-            setReadOnly(false).open,
-          "an Access database")
+      val ds = new SQLServerDataSource
+
+      ds.setUser(username)
+
+      ds.setPassword(password)
+
+      ds.setServerName(serverName)
+
+      ds.setPortNumber(port)
+
+      ds.setDatabaseName(databaseName)
 
       val resultsFrame = new Frame {
           title = "Results"
@@ -264,7 +331,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
                 case ev @ MousePressed(_,_,_,_,true) => showPopupMenu(ev)
                 case ev @ MouseReleased(_,_,_,_,true) => showPopupMenu(ev)
               }
-                listenTo(mouse.clicks)
+
+              listenTo(mouse.clicks)
 
               def showPopupMenu(event: MouseEvent): Unit = {
                 if (selected != null && selected.length > 0)
@@ -275,8 +343,10 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
                   contents += new MenuItem(
                       Action("Copy") {
                         val selection = new StringSelection(textArea.selected)
-                          toolkit.getSystemClipboard.setContents(selection, selection)
-                          this.visible = false
+
+                        toolkit.getSystemClipboard.setContents(selection, selection)
+
+                        this.visible = false
                       })
                 }
             }
@@ -285,44 +355,56 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
               contents += new TextField {
                   editable = false
-                    text = s"${(new File(xlsPath)).getName} loaded into ${(new File(dbPath)).getName}"
-                    font = font.deriveFont(Font.BOLD)
-                    horizontalAlignment = Alignment.Center
-                    border = Swing.EmptyBorder(10)
-                    maximumSize = preferredSize
+
+                  text = s"${(new File(xlsPath)).getName} loaded into $databaseName"
+
+                  font = font.deriveFont(Font.BOLD)
+
+                  horizontalAlignment = Alignment.Center
+
+                  border = Swing.EmptyBorder(10)
+
+                  maximumSize = preferredSize
                 }
 
               contents += new ScrollPane {
                   contents = textArea
-                    verticalScrollBarPolicy = ScrollPane.BarPolicy.AsNeeded
-                    horizontalScrollBarPolicy = ScrollPane.BarPolicy.Never
+
+                  verticalScrollBarPolicy = ScrollPane.BarPolicy.AsNeeded
+
+                  horizontalScrollBarPolicy = ScrollPane.BarPolicy.Never
                 }
             }
         }
 
-      /* for Access db only, yet */
-      mdb.DbFiller.getTables(db).fold(
-        errs => throw new OpenException(errs.unwrap.mkString("\n")),
-        tables => {
-          val filler = new mdb.DBFiller(db, tables)
+      val connection = ds.getConnection
 
-          filler.getFromWorkbook(
-            (s: String) => resultsFrame.textArea.append(s + "\n"),
-            xls)
+      connection.setAutoCommit(true)
 
-          xlsFile.close
+      val filler = new sql.DBFiller()(connection)
 
-          db.close
-        })
+      filler.getFromWorkbook(
+        (s: String) => resultsFrame.textArea.append(s + "\n"),
+        xls)
 
       if (resultsFrame.size == new Dimension(0, 0)) resultsFrame.pack()
-        resultsFrame.visible = true
+
+      resultsFrame.visible = true
 
     } catch {
       case oe: OpenException =>
         Dialog.showOptions(
           message = oe.getMessage,
           title = "File Error",
+          optionType = Dialog.Options.Default,
+          messageType = Dialog.Message.Error,
+          entries = List("OK"),
+          initial = 0)
+
+      case se: SQLException =>
+        Dialog.showOptions(
+          message = se.getMessage,
+          title = "Database Error",
           optionType = Dialog.Options.Default,
           messageType = Dialog.Message.Error,
           entries = List("OK"),

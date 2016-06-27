@@ -4,7 +4,7 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at http://mozilla.org/MPL/2.0/.
 //
-package org.truffulatree.h2odb
+package org.truffulatree.h2odb.mdb
 
 import java.awt.{Cursor, Dimension, Font}
 import java.awt.datatransfer.StringSelection
@@ -301,10 +301,10 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         }
 
       /* for Access db only, yet */
-      mdb.DbFiller.getTables(db).fold(
+      DbFiller.getTables(db).fold(
         errs => throw new OpenException(errs.unwrap.mkString("\n")),
         tables => {
-          val filler = new mdb.DBFiller(db, tables)
+          val filler = new DBFiller(db, tables)
 
           filler.getFromWorkbook(
             (s: String) => resultsFrame.textArea.append(s + "\n"),

@@ -198,6 +198,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
           contents += dbConnectionParameters
 
+          contents += buttonPanel
+
           border = Swing.EmptyBorder(30, 30, 10, 30)
         }
 

@@ -15,6 +15,7 @@ import scala.concurrent.SyncVar
 import scala.swing._
 import scala.swing.event._
 
+import cats.data.Xor
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
 import javax.swing.filechooser.FileNameExtensionFilter
@@ -165,8 +166,9 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
           new FileNameExtensionFilter("Excel file", "xls"))
 
       val dbConnectionParameters = new GridPanel(5, 2) {
-          def inputField(name: String, fieldConstructor: Int => TextField):
-              TextField = {
+          def inputField[A <: scala.swing.Component](
+            name: String,
+            fieldConstructor: Int => A): A = {
             val fieldWidth = 20
 
             val label = new Label(name)
@@ -212,15 +214,25 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
             val xlsPath = xlsPanel.selectButton.field.text
 
-            val username = dbConnectionParameters.usernameField.text
+            def optText(field: TextField): Option[String] = {
+              val trimmed = field.text.trim
+              if (trimmed.isEmpty) None else Some(trimmed)
+            }
 
-            val password = dbConnectionParameters.passwordField.text
+            val username = optText(dbConnectionParameters.usernameField)
 
-            val serverName = dbConnectionParameters.serverNameField.text
+            val password = {
+              val pw = dbConnectionParameters.passwordField.password
+              if (pw.isEmpty) None else Some(pw)
+            }
 
-            val port = dbConnectionParameters.portField.text.toInt
+            val serverName = optText(dbConnectionParameters.serverNameField)
 
-            val databaseName = dbConnectionParameters.databaseNameField.text
+            val port =
+              optText(dbConnectionParameters.portField).
+                flatMap(s => Xor.catchOnly[NumberFormatException](s.toInt).toOption)
+
+            val databaseName = optText(dbConnectionParameters.databaseNameField)
 
             val origCursor = cursor
 
@@ -250,9 +262,9 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
                   f == dbConnectionParameters.databaseNameField) => {
               if (xlsPanel.selectButton.field.text.isEmpty ||
                     dbConnectionParameters.usernameField.text.isEmpty ||
-                    dbConnectionParameters.passwordField.text.isEmpty ||
+                    dbConnectionParameters.passwordField.password.isEmpty ||
                     dbConnectionParameters.serverNameField.text.isEmpty ||
-                    dbConnectionParameters.portField.text.isEmpty ||
+                    /* dbConnectionParameters.portField.text.isEmpty || */
                     dbConnectionParameters.databaseNameField.text.isEmpty) {
                 buttonPanel.goButton.enabled = false
               } else {
@@ -282,11 +294,11 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
   def runFiller(
     xlsPath: String,
-    username: String,
-    password: String,
-    serverName: String,
-    port: Int,
-    databaseName: String): Unit = {
+    username: Option[String],
+    password: Option[Array[Char]],
+    serverName: Option[String],
+    port: Option[Int],
+    databaseName: Option[String]): Unit = {
 
     class OpenException(m: String) extends Exception(m)
 
@@ -310,15 +322,15 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
 
       val ds = new SQLServerDataSource
 
-      ds.setUser(username)
+      username foreach ds.setUser
 
-      ds.setPassword(password)
+      password foreach (pw => ds.setPassword(new String(pw)))
 
-      ds.setServerName(serverName)
+      serverName foreach ds.setServerName
 
-      ds.setPortNumber(port)
+      port foreach ds.setPortNumber
 
-      ds.setDatabaseName(databaseName)
+      databaseName foreach ds.setDatabaseName
 
       val resultsFrame = new Frame {
           title = "Results"

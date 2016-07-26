@@ -21,15 +21,19 @@ class DBFiller(implicit val connection: Connection)
   /** All (samplePointId, analyte) pairs from major and minor chemistry tables
     */
   protected val existingSamples: Set[(String,String)] = {
+    val samplePointIdCol = dbInfo.samplePointId
+
+    val analyteCol = dbInfo.analyte
+
     val parser =
-      SqlParser.str(dbInfo.samplePointId) ~ SqlParser.str(dbInfo.analyte) map {
-        case samplePointId ~ analyte => (samplePointId -> analyte)
+      SqlParser.str(samplePointIdCol) ~ SqlParser.str(analyteCol) map {
+        case (samplePointId@_) ~ (analyte@_) =>
+          (samplePointId -> analyte)
       }
 
     def getSamples(table: String): Set[(String,String)] = {
       val pairs = SQL"""
-        SELECT c.#${dbInfo.samplePointId}, c.#${dbInfo.analyte}
-        FROM #$table c"""
+        SELECT #$samplePointIdCol, #$analyteCol FROM #$table"""
         .as(parser.*)
 
       pairs.toSet
@@ -43,13 +47,18 @@ class DBFiller(implicit val connection: Connection)
   /** Map from samplePointId to samplePointGUID
     */
   private[this] val guids: Map[String, String] = {
+    val samplePointIdCol = dbInfo.samplePointId
+
+    val samplePointGUIDCol = dbInfo.samplePointGUID
+
     val parser =
-      SqlParser.str(dbInfo.samplePointId) ~ SqlParser.str(dbInfo.samplePointGUID) map {
-        case samplePointId ~ samplePointGUID => (samplePointId -> samplePointGUID)
+      SqlParser.str(samplePointIdCol) ~ SqlParser.str(samplePointGUIDCol) map {
+        case (samplePointId@_) ~ (samplePointGUID@_) =>
+          (samplePointId -> samplePointGUID)
       }
 
     val pairs = SQL"""
-      SELECT i.#${dbInfo.samplePointId}, i.#${dbInfo.samplePointGUID}
+      SELECT #$samplePointIdCol, #$samplePointGUIDCol
       FROM #${dbInfo.chemistrySampleInfo}"""
       .as(parser.*)
 

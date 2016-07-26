@@ -11,13 +11,12 @@ import cats.data._
 import cats.std.list._
 import cats.std.option._
 import cats.syntax.foldable._
-import com.typesafe.scalalogging.Logger
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
-import org.slf4j.LoggerFactory
+import play.api.Logger
 
 abstract class DBFiller[A <: DbRecord] extends Tables {
 
-  protected val logger = Logger(LoggerFactory.getLogger(getClass.getName.init))
+  protected val logger = Logger(getClass.getName.init)
 
   import xls.Table.{State => TState}
   import xls.Sheet.{State => SState}

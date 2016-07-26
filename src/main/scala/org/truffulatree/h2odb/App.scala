@@ -11,7 +11,6 @@ import java.awt.datatransfer.StringSelection
 import java.io.{File, FileInputStream}
 import java.sql.SQLException
 
-import scala.concurrent.SyncVar
 import scala.swing._
 import scala.swing.event._
 
@@ -20,29 +19,6 @@ import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
 import javax.swing.filechooser.FileNameExtensionFilter
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
-import org.slf4j.LoggerFactory
-
-/** Add xsbti.MainResult return value to SimpleSwingApplication.main().
-  */
-trait SwingAppMain {
-  self: SimpleSwingApplication =>
-
-  private val exitVal = new SyncVar[Int]()
-
-  /** Call SimpleSwingApplication.main(), then wait until exitVal has a value.
-    */
-  def apply(args: Array[String]): xsbti.MainResult = {
-    main(args)
-
-    new Exit(exitVal.take())
-  }
-
-  override def quit(): Unit = {
-    shutdown()
-
-    exitVal.put(0)
-  }
-}
 
 object PopupMenu {
   private[PopupMenu] trait JPopupMenuMixin { def popupMenuWrapper: PopupMenu }
@@ -73,7 +49,7 @@ class PopupMenu extends Component with SequentialContainer.Wrapper {
   }
 }
 
-object SwingApp extends SimpleSwingApplication with SwingAppMain {
+object SwingApp extends SimpleSwingApplication {
 
   class SelectButton(
     val buttonText: String,
@@ -339,7 +315,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
               textArea =>
 
               lineWrap = true
-                wordWrap = true
+
+              wordWrap = true
 
               reactions += {
                 case ev @ MousePressed(_,_,_,_,true) => showPopupMenu(ev)
@@ -401,6 +378,8 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
         (s: String) => resultsFrame.textArea.append(s + "\n"),
         xls)
 
+      xlsFile.close
+
       if (resultsFrame.size == new Dimension(0, 0)) resultsFrame.pack()
 
       resultsFrame.visible = true
@@ -423,32 +402,6 @@ object SwingApp extends SimpleSwingApplication with SwingAppMain {
           messageType = Dialog.Message.Error,
           entries = List("OK"),
           initial = 0)
-    }
-  }
-}
-
-class Exit(val code: Int) extends xsbti.Exit
-
-class Run extends xsbti.AppMain {
-  private val logger = LoggerFactory.getLogger(getClass.getName.init)
-  def run(configuration: xsbti.AppConfiguration): xsbti.MainResult = {
-    configuration.provider.scalaProvider.version match {
-      case "2.11.8" => {
-        try {
-          SwingApp(configuration.arguments)
-        } catch {
-          case e: Exception => {
-            logger.error(e.getMessage)
-            new Exit(1)
-          }
-        }
-      }
-      case _ => new xsbti.Reboot {
-        def arguments = configuration.arguments
-        def baseDirectory = configuration.baseDirectory
-        def scalaVersion = "2.11.8"
-        def app = configuration.provider.id
-      }
     }
   }
 }

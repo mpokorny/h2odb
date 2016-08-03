@@ -19,6 +19,7 @@ import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
 import javax.swing.filechooser.FileNameExtensionFilter
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
+import org.jdbcdslog.ConnectionLoggingProxy
 
 object PopupMenu {
   private[PopupMenu] trait JPopupMenuMixin { def popupMenuWrapper: PopupMenu }
@@ -368,7 +369,7 @@ object SwingApp extends SimpleSwingApplication {
             }
         }
 
-      val connection = ds.getConnection
+      val connection = ConnectionLoggingProxy.wrap(ds.getConnection)
 
       connection.setAutoCommit(true)
 

@@ -33,7 +33,8 @@ class DBFiller(implicit val connection: Connection)
 
     def getSamples(table: String): Set[(String,String)] = {
       val pairs = SQL"""
-        SELECT #$samplePointIdCol, #$analyteCol FROM #$table"""
+        SELECT #$samplePointIdCol, #$analyteCol FROM #$table
+        WHERE #$analyteCol IS NOT NULL"""
         .as(parser.*)
 
       pairs.toSet

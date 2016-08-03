@@ -14,7 +14,7 @@ trait Tables extends h2odb.Tables {
     new DbInfo {
 
       /** Name of "chemistry sample info" table */
-      val chemistrySampleInfo = "Chemistry SampleInfo"
+      val chemistrySampleInfo = "[Chemistry SampleInfo]"
 
       /** Name of "major chemistry" table */
       val majorChemistry = "MajorChemistry"

@@ -14,7 +14,6 @@ final case class DbRecord(
   analysisMethod: String,
   analyte: String,
   labId: String,
-  pointId: String,
   priority: Int,
   samplePointGUID: String,
   samplePointId: String,
@@ -34,8 +33,6 @@ final case class DbRecord(
         Some(analyte)
       case dbInfo.labId =>
         Some(labId)
-      case dbInfo.pointId =>
-        Some(pointId)
       case dbInfo.samplePointGUID =>
         Some(samplePointGUID)
       case dbInfo.samplePointId =>
@@ -52,7 +49,7 @@ final case class DbRecord(
 
   override def toString: String =
       s"""|DbRecord($analysesAgency, $analysisDate, $analysisMethod,
-          | $analyte, $labId, $pointId, $priority, $samplePointGUID,
+          | $analyte, $labId, $priority, $samplePointGUID,
           | $samplePointId, $sampleValue, $symbol, $table,
           | $units)""".stripMargin
 }

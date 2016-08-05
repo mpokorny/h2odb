@@ -349,7 +349,7 @@ object SwingApp extends SimpleSwingApplication {
               contents += new TextField {
                   editable = false
 
-                  text = s"${(new File(xlsPath)).getName} loaded into $databaseName"
+                  text = s"""${(new File(xlsPath)).getName} loaded into ${databaseName.getOrElse("a database")}"""
 
                   font = font.deriveFont(Font.BOLD)
 

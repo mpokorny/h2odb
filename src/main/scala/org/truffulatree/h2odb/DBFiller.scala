@@ -36,19 +36,18 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
 
   /** All (samplePointId, analyte) pairs from major and minor chemistry tables
     */
-  protected val existingSamples: Set[(String,String)]
+  protected val existingSamples: Xor[NonEmptyList[Error], Set[(String,String)]]
 
-  def getFromWorkbook(writeln: String => Unit, workbook: HSSFWorkbook): Unit = {
+  def getFromWorkbook(workbook: HSSFWorkbook):
+      Xor[NonEmptyList[Error], Seq[String]] = {
     val worksheet =
       Xor.catchOnly[IllegalArgumentException](workbook.getSheetAt(0)).
-        leftMap(_ => "Failed to open worksheet 0 of XLS file")
+        leftMap(_ => NonEmptyList(InvalidSheet(0): Error))
 
-    worksheet.fold(
-      err => writeln(err),
-      sheet => processRows(writeln, xls.Table.initial(sheet)))
+    worksheet.flatMap(sh => processRows(xls.Table.initial(sh)))
   }
 
-  def processRows(writeln: (String) => Unit, sheet: TState[SState]): Unit = {
+  def processRows(sheet: TState[SState]): Xor[NonEmptyList[Error], Seq[String]] = {
 
     implicit val sheetSource = xls.Sheet.source
 
@@ -79,9 +78,8 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
         }
 
     vDbRecords.value.
-      fold(
-        showValidationErrors(writeln, _),
-        recAcc => processDbRecords(writeln, recAcc.values.toSeq))
+      leftMap(_.map { case (r, e) => XlsValidationError(r, e): Error }).
+      flatMap(recAcc => processDbRecords(recAcc.values.toSeq))
   }
 
   private[this] def accumulateDbRecord(acc: DbRecordAcc, rec: A): DbRecordAcc = {
@@ -142,57 +140,49 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
     }
 
   private[this] def showValidationErrors(
-    writeln: String => Unit,
-    errs: NonEmptyList[(Int, Error)]): Unit = {
-    val messages =
-      errs.unwrap.sortBy(_._1) map { case (i@_, err@_) =>
-        s"ERROR: in XLS file, row $i: " + err.message
-      }
+    errs: NonEmptyList[(Int, Error)]): Seq[String] =
+    errs.unwrap.sortBy(_._1) map { case (i@_, err@_) =>
+      s"ERROR: in XLS file, row $i: " + err.message
+    }
 
-    writeln(messages.mkString("\n"))
-  }
-
-  private[this] def processDbRecords(
-    writeln: String => Unit,
-    records: Seq[A]):
-      Unit = {
+  private[this] def processDbRecords(records: Seq[A]):
+      Xor[NonEmptyList[Error], Seq[String]] = {
 
     if (!records.isEmpty) {
 
       logger.debug(records.mkString("\n"))
 
       /* add rows to database */
-      addToDb(records)
+      addToDb(records).fold (
+        errs => ???,
+        recs => (showAdded(recs) :+ "----------") ++ showQuality(recs))
 
-      writeln(
-        s"Added ${records.length} records with the following sample point IDs to database:")
-
-      writeln(records.map(_.samplePointId).distinct.sorted.mkString("\n"))
-
-      writeln("----------")
-
-      /* test values against water quality standards */
-      val poorQuality = records filterNot meetsStandards
-
-      if (poorQuality.isEmpty) {
-        writeln("All records meet water quality standards")
-      } else {
-        val failStr =
-          if (poorQuality.length > 1) s"${poorQuality.length} records fail"
-          else "1 record fails"
-
-        writeln(failStr + " to meet water quality standards:")
-
-        val reports =
-          poorQuality.sorted map (rec =>
-            f"${rec.samplePointId} - ${rec.analyte} (${rec.sampleValue}%g ${rec.units})")
-
-        writeln(reports.mkString("\n"))
-      }
     } else {
-      writeln("Added 0 rows to database")
+      Seq("Added 0 rows to database")
     }
 
+  }
+
+  private[this] def showAdded(records: Seq[A]): Seq[String] = {
+    s"Added ${records.length} records with the following sample point IDs to database:" +:
+      records.map(_.samplePointId).distinct.sorted
+  }
+
+  private[this] def showQuality(records: Seq[A]): Seq[String] = {
+    /* test values against water quality standards */
+    val poorQuality = records filterNot meetsStandards
+
+    if (poorQuality.isEmpty) {
+      Seq("All records meet water quality standards")
+    } else {
+      val failStr =
+        if (poorQuality.length > 1) s"${poorQuality.length} records fail"
+        else "1 record fails"
+
+      (failStr + " to meet water quality standards:") +:
+        poorQuality.sorted map (rec =>
+          f"${rec.samplePointId} - ${rec.analyte} (${rec.sampleValue}%g ${rec.units})")
+    }
   }
 
   private[this] def meetsStandards(record: A): Boolean = {
@@ -207,10 +197,15 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
 
   /** Add records to database
     */
-  protected def addToDb(records: Seq[A]): Unit
+  protected def addToDb(records: Seq[A]): Xor[NonEmptyList[DbError], Seq[A]]
 
-  sealed trait Error {
+  trait Error {
     def message: String
+  }
+
+  case class InvalidSheet(sheet: Int) extends Error {
+    override def message: String =
+      s"Failed to open worksheet $sheet of XLS file"
   }
 
   case class InvalidHeader(columns: Seq[Int]) extends Error {
@@ -268,6 +263,10 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
       s"Sample for ($samplePointId, $analyte) already exists in database"
   }
 
+  case class XlsValidationError(row: Int, err: Error) extends Error {
+    override def message: String =
+      s"ERROR: in XLS file, row $row: ${err.message}"
+  }
   def fromAnalysisReportError(err: AnalysisReport.Error): Error = err match {
       case AnalysisReport.InvalidHeader(columns@_) =>
         InvalidHeader(columns)

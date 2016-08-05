@@ -23,7 +23,7 @@ addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.8.0")
 
 libraryDependencies ++= Seq(
     "com.healthmarketscience.jackcess" % "jackcess" % "2.0.4",
-    "com.typesafe.play" %% "anorm" % "2.5.0",
+    "com.typesafe.play" %% "anorm" % "2.5.2",
     jdbc,
     "org.apache.poi" % "poi" % "3.14",
     "org.scala-lang.modules" %% "scala-swing" % "2.0.0-M2",

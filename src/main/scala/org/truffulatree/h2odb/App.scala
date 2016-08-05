@@ -15,6 +15,7 @@ import scala.swing._
 import scala.swing.event._
 
 import cats.data.Xor
+import cats.std.list._
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
 import javax.swing.filechooser.FileNameExtensionFilter
@@ -371,13 +372,12 @@ object SwingApp extends SimpleSwingApplication {
 
       val connection = ConnectionLoggingProxy.wrap(ds.getConnection)
 
-      connection.setAutoCommit(true)
-
       val filler = new sql.DBFiller()(connection)
 
-      filler.getFromWorkbook(
-        (s: String) => resultsFrame.textArea.append(s + "\n"),
-        xls)
+      filler.getFromWorkbook(xls).fold(
+        _.unwrap.map(_.message),
+        results => results).
+        foreach(str => resultsFrame.textArea.append(str + "\n"))
 
       xlsFile.close
 

@@ -131,7 +131,7 @@ class DBFiller(implicit val connection: Connection)
     }
   }
 
-  override def addToDb(records: Seq[DbRecord]): Unit = {
+  override def addToDb(records: Seq[DbRecord]): Xor[Seq[String], Seq[DbRecord]] = {
     records.groupBy(_.table) foreach { case (table, recs) =>
 
       val namedParameters = recs map toNamedParameters

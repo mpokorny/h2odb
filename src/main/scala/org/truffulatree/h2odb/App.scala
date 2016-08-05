@@ -14,7 +14,7 @@ import java.sql.SQLException
 import scala.swing._
 import scala.swing.event._
 
-import cats.data.Xor
+import cats.data.{NonEmptyList, Xor}
 import cats.std.list._
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
@@ -372,11 +372,22 @@ object SwingApp extends SimpleSwingApplication {
 
       val connection = ConnectionLoggingProxy.wrap(ds.getConnection)
 
-      val filler = new sql.DBFiller()(connection)
+      connection.setAutoCommit(false)
 
-      filler.getFromWorkbook(xls).fold(
-        _.unwrap.map(_.message),
-        results => results).
+      sql.DBFiller(connection).
+        leftMap(NonEmptyList(_)).
+        flatMap(_.getFromWorkbook(xls)).
+        fold(
+          errs => {
+            connection.rollback
+
+            errs.unwrap.map(_.message)
+          },
+          results => {
+            connection.commit
+
+            results
+          }).
         foreach(str => resultsFrame.textArea.append(str + "\n"))
 
       xlsFile.close

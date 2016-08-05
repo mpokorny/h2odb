@@ -19,6 +19,8 @@ import org.truffulatree.h2odb
 class DBFiller(val db: Database, dbTables: Map[String, Table])
     extends h2odb.DBFiller[DbRecord] with Tables {
 
+  import h2odb.DBFiller._
+
   val majorChemistry = dbTables(dbInfo.majorChemistry)
 
   val minorChemistry = dbTables(dbInfo.minorChemistry)
@@ -121,14 +123,11 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
     }
   }
 
-  override def addToDb(records: Seq[DbRecord]): Unit = {
-    records foreach addToTable
+  override def addToDb(records: Seq[DbRecord]): Xor[DbError, Seq[DbRecord]] =
+    (records.toList traverseU_ addToTable).
+      bimap(th => DbError(th), _ => { db.flush(); records })
 
-    db.flush()
-  }
-
-  protected def addToTable(record: DbRecord): Unit = {
-    /* TODO: error handling when table lookup fails? */
+  protected def addToTable(record: DbRecord): Xor[Throwable, Unit] = {
     val colNames = tableColumns.getOrElse(record.table, Seq.empty)
 
     val row =
@@ -136,11 +135,11 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
 
     logger.debug(s"$row -> ${record.table}")
 
-    dbTables(record.table).addRow(row:_*)
+    Xor.catchNonFatal(dbTables(record.table).addRow(row:_*))
   }
 }
 
-object DbFiller extends Tables {
+object DBFiller extends Tables {
   def getTables(db: Database): Xor[NonEmptyList[String], Map[String, Table]] = {
 
     def getTable(name: String): Xor[String, Table] =

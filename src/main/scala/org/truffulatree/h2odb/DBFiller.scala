@@ -16,6 +16,8 @@ import play.api.Logger
 
 abstract class DBFiller[A <: DbRecord] extends Tables {
 
+  import DBFiller._
+
   protected val logger = Logger(getClass.getName.init)
 
   import xls.Table.{State => TState}
@@ -36,7 +38,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
 
   /** All (samplePointId, analyte) pairs from major and minor chemistry tables
     */
-  protected val existingSamples: Xor[NonEmptyList[Error], Set[(String,String)]]
+  protected val existingSamples: Set[(String,String)]
 
   def getFromWorkbook(workbook: HSSFWorkbook):
       Xor[NonEmptyList[Error], Seq[String]] = {
@@ -63,7 +65,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
           vrec.
             andThen(validateAnalysisRecord).
             andThen(convertAnalysisRecord).
-            andThen(validateSample(_).toValidatedNel).
+            andThen(validateSample).
             leftMap(_.map((i, _)))
       }
 
@@ -132,11 +134,12 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
     }
   }
 
-  private[this] def validateSample(record: A): Validated[Error, A] =
+  private[this] def validateSample(record: A): ValidatedNel[Error, A] =
     if (!existingSamples.contains((record.samplePointId, record.analyte))) {
       Validated.valid(record)
     } else {
-      Validated.invalid(DuplicateSample(record.samplePointId, record.analyte))
+      Validated.invalid(
+        NonEmptyList(DuplicateSample(record.samplePointId, record.analyte)))
     }
 
   private[this] def showValidationErrors(
@@ -153,12 +156,12 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
       logger.debug(records.mkString("\n"))
 
       /* add rows to database */
-      addToDb(records).fold (
-        errs => ???,
+      addToDb(records).bimap(
+        err => NonEmptyList(err),
         recs => (showAdded(recs) :+ "----------") ++ showQuality(recs))
 
     } else {
-      Seq("Added 0 rows to database")
+      Xor.right(Seq("Added 0 rows to database"))
     }
 
   }
@@ -179,9 +182,11 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
         if (poorQuality.length > 1) s"${poorQuality.length} records fail"
         else "1 record fails"
 
-      (failStr + " to meet water quality standards:") +:
-        poorQuality.sorted map (rec =>
+      val failures =
+        poorQuality.sorted map(rec =>
           f"${rec.samplePointId} - ${rec.analyte} (${rec.sampleValue}%g ${rec.units})")
+
+      (failStr + " to meet water quality standards:") +: failures
     }
   }
 
@@ -196,8 +201,29 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
   protected def convertAnalysisRecord(record: AnalysisRecord): ValidatedNel[Error, A]
 
   /** Add records to database
+    *
+    * Records should stop being inserted as soon as an error occurs; therefore,
+    * only one error value may be returned.
     */
-  protected def addToDb(records: Seq[A]): Xor[NonEmptyList[DbError], Seq[A]]
+  protected def addToDb(records: Seq[A]): Xor[DbError, Seq[A]]
+
+  def fromAnalysisReportError(err: AnalysisReport.Error): Error = err match {
+      case AnalysisReport.InvalidHeader(columns@_) =>
+        InvalidHeader(columns)
+
+      case AnalysisReport.CellType(col@_, typ@_) =>
+        CellType(col, typ)
+
+      case AnalysisReport.MissingField(name@_) =>
+        MissingField(name)
+
+      case AnalysisReport.FieldType(name@_) =>
+        FieldType(name)
+    }
+
+}
+
+object DBFiller {
 
   trait Error {
     def message: String
@@ -267,18 +293,10 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
     override def message: String =
       s"ERROR: in XLS file, row $row: ${err.message}"
   }
-  def fromAnalysisReportError(err: AnalysisReport.Error): Error = err match {
-      case AnalysisReport.InvalidHeader(columns@_) =>
-        InvalidHeader(columns)
 
-      case AnalysisReport.CellType(col@_, typ@_) =>
-        CellType(col, typ)
-
-      case AnalysisReport.MissingField(name@_) =>
-        MissingField(name)
-
-      case AnalysisReport.FieldType(name@_) =>
-        FieldType(name)
-    }
-
+  case class DbError(th: Throwable) extends Error {
+    override def message: String =
+      s"ERROR: Database error: ${th.getMessage}"
+  }
 }
+

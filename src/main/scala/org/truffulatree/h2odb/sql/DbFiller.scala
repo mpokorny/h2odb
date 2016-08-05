@@ -12,59 +12,15 @@ import anorm._
 import cats._
 import cats.data._
 import cats.std.list._
-import cats.syntax.option._
+import cats.syntax.all._
 import org.truffulatree.h2odb
 
-class DBFiller(implicit val connection: Connection)
+class DBFiller(
+  override protected val existingSamples: Set[(String, String)],
+  private val guids: Map[String, String])(implicit val connection: Connection)
     extends h2odb.DBFiller[DbRecord] with Tables {
 
-  /** All (samplePointId, analyte) pairs from major and minor chemistry tables
-    */
-  protected val existingSamples: Set[(String,String)] = {
-    val samplePointIdCol = dbInfo.samplePointId
-
-    val analyteCol = dbInfo.analyte
-
-    val parser =
-      SqlParser.str(samplePointIdCol) ~ SqlParser.str(analyteCol) map {
-        case (samplePointId@_) ~ (analyte@_) =>
-          (samplePointId -> analyte)
-      }
-
-    def getSamples(table: String): Set[(String,String)] = {
-      val pairs = SQL"""
-        SELECT #$samplePointIdCol, #$analyteCol FROM #$table
-        WHERE #$analyteCol IS NOT NULL"""
-        .as(parser.*)
-
-      pairs.toSet
-    }
-
-    List(dbInfo.majorChemistry, dbInfo.minorChemistry).
-      map(getSamples _).
-      reduceLeft(_ ++ _)
-  }
-
-  /** Map from samplePointId to samplePointGUID
-    */
-  private[this] val guids: Map[String, String] = {
-    val samplePointIdCol = dbInfo.samplePointId
-
-    val samplePointGUIDCol = dbInfo.samplePointGUID
-
-    val parser =
-      SqlParser.str(samplePointIdCol) ~ SqlParser.str(samplePointGUIDCol) map {
-        case (samplePointId@_) ~ (samplePointGUID@_) =>
-          (samplePointId -> samplePointGUID)
-      }
-
-    val pairs = SQL"""
-      SELECT #$samplePointIdCol, #$samplePointGUIDCol
-      FROM #${dbInfo.chemistrySampleInfo}"""
-      .as(parser.*)
-
-    pairs.toMap
-  }
+  import h2odb.DBFiller._
 
   /** Convert xls records to database table format
     *
@@ -131,20 +87,24 @@ class DBFiller(implicit val connection: Connection)
     }
   }
 
-  override def addToDb(records: Seq[DbRecord]): Xor[Seq[String], Seq[DbRecord]] = {
-    records.groupBy(_.table) foreach { case (table, recs) =>
+  override def addToDb(records: Seq[DbRecord]): Xor[DbError, Seq[DbRecord]] = {
+    val inserts =
+      records.groupBy(_.table).toList map { case (table, recs) =>
 
-      val namedParameters = recs map toNamedParameters
+        val namedParameters = recs map toNamedParameters
 
-      logger.debug(namedParameters.map(_.toString + " -> " + table).mkString("\n"))
+        logger.
+          debug(namedParameters.map(_.toString + " -> " + table).mkString("\n"))
 
-      addToTable(table, namedParameters)
-    }
+        Eval.always(addToTable(table, namedParameters).bimap(DbError, _ => recs))
+      }
+
+    inserts.traverseU(_.value).map(_.flatten)
   }
 
   private[this] def addToTable(
     table: String,
-    records: Seq[Seq[NamedParameter]]): Unit = {
+    records: Seq[Seq[NamedParameter]]): Xor[Throwable, Unit] = {
     val insert = s"""
         INSERT INTO $table (
           ${dbInfo.analysesAgency},
@@ -169,12 +129,13 @@ class DBFiller(implicit val connection: Connection)
           {${dbInfo.symbol}},
           {${dbInfo.units}})"""
 
-    records match {
-      case Seq(head@_, tail@_*) =>
-        BatchSql(insert, head, tail:_*).execute()
+    Xor.catchNonFatal(
+      records match {
+        case Seq(head@_, tail@_*) =>
+          BatchSql(insert, head, tail:_*).execute()
 
-      case Seq() =>
-    }
+        case Seq() =>
+      })
   }
 
 
@@ -190,4 +151,62 @@ class DBFiller(implicit val connection: Connection)
       dbInfo.sampleValue -> record.sampleValue,
       dbInfo.symbol -> record.symbol,
       dbInfo.units -> dbInfo.units)
+}
+
+object DBFiller extends Tables {
+
+  type DbError = h2odb.DBFiller.DbError
+
+  def apply(implicit connection: Connection): Xor[DbError, DBFiller] = {
+
+    val existingSamples: Xor[DbError, Set[(String,String)]] = {
+      val samplePointIdCol = dbInfo.samplePointId
+
+      val analyteCol = dbInfo.analyte
+
+      val parser =
+        SqlParser.str(samplePointIdCol) ~ SqlParser.str(analyteCol) map {
+          case (samplePointId@_) ~ (analyte@_) =>
+            (samplePointId -> analyte)
+        }
+
+      def getSamples(table: String): Eval[Xor[Throwable, List[(String,String)]]] =
+        Eval.always(
+          Xor.catchNonFatal(
+            SQL"""
+            SELECT #$samplePointIdCol, #$analyteCol FROM #$table
+            WHERE #$analyteCol IS NOT NULL"""
+              .as(parser.*)))
+
+      val samples =
+        List(dbInfo.majorChemistry, dbInfo.minorChemistry).
+          map(tb => getSamples(tb))
+
+      samples.traverseU(_.value)
+        .bimap(h2odb.DBFiller.DbError, _.flatten.toSet)
+    }
+
+    lazy val guids: Xor[DbError, Map[String, String]] = {
+      val samplePointIdCol = dbInfo.samplePointId
+
+      val samplePointGUIDCol = dbInfo.samplePointGUID
+
+      val parser =
+        SqlParser.str(samplePointIdCol) ~ SqlParser.str(samplePointGUIDCol) map {
+          case (samplePointId@_) ~ (samplePointGUID@_) =>
+            (samplePointId -> samplePointGUID)
+        }
+
+      val pairs =
+        Xor.catchNonFatal(
+          SQL"""
+            SELECT #$samplePointIdCol, #$samplePointGUIDCol
+            FROM #${dbInfo.chemistrySampleInfo}"""
+            .as(parser.*))
+
+      pairs.bimap(h2odb.DBFiller.DbError, _.toMap)
+    }
+
+    existingSamples >>= (es => guids map (gs => new DBFiller(es, gs)))
+  }
 }

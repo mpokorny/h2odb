@@ -150,7 +150,7 @@ class DBFiller(
       dbInfo.samplePointId -> record.samplePointId,
       dbInfo.sampleValue -> record.sampleValue,
       dbInfo.symbol -> record.symbol,
-      dbInfo.units -> dbInfo.units)
+      dbInfo.units -> record.units)
 }
 
 object DBFiller extends Tables {

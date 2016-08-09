@@ -8,6 +8,9 @@ package org.truffulatree.h2odb.xls
 
 import java.util.Date
 
+/** XLS file cell value representation
+  * 
+  */
 sealed trait CellValue {
   type A
   val value: A
@@ -15,6 +18,8 @@ sealed trait CellValue {
   def typeDescription: String
 }
 
+/** String cell value
+  */
 final case class CellString(value: String) extends CellValue {
   type A = String
   override def hasTypeOf(other: CellValue): Boolean = other match {
@@ -24,6 +29,8 @@ final case class CellString(value: String) extends CellValue {
   def typeDescription: String = "String"
 }
 
+/** Numeric cell value
+  */
 final case class CellNumeric(value: Double) extends CellValue {
   type A = Double
   override def hasTypeOf(other: CellValue): Boolean = other match {
@@ -33,6 +40,8 @@ final case class CellNumeric(value: Double) extends CellValue {
   def typeDescription: String = "Numeric"
 }
 
+/** Date cell value
+  */
 final case class CellDate(value: Date) extends CellValue {
   type A = Date
   override def hasTypeOf(other: CellValue): Boolean = other match {
@@ -42,6 +51,8 @@ final case class CellDate(value: Date) extends CellValue {
   def typeDescription: String = "Date"
 }
 
+/** Boolean cell value
+  */
 final case class CellBoolean(value: Boolean) extends CellValue {
   type A = Boolean
   override def hasTypeOf(other: CellValue): Boolean = other match {
@@ -51,6 +62,8 @@ final case class CellBoolean(value: Boolean) extends CellValue {
   def typeDescription: String = "Boolean"
 }
 
+/** Blank cell value
+  */
 final case object CellBlank extends CellValue {
   type A = Unit
   val value = ()
@@ -61,6 +74,8 @@ final case object CellBlank extends CellValue {
   def typeDescription: String = "Blank"
 }
 
+/** Formula cell value
+  */
 final case class CellFormula(value: String) extends CellValue {
   type A = String
   override def hasTypeOf(other: CellValue): Boolean = other match {
@@ -70,6 +85,8 @@ final case class CellFormula(value: String) extends CellValue {
   def typeDescription: String = "Formula"
 }
 
+/** Error cell value
+  */
 final case class CellError(value: Byte) extends CellValue {
   type A = Byte
   override def hasTypeOf(other: CellValue): Boolean = other match {

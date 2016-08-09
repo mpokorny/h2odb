@@ -14,9 +14,12 @@ import cats.syntax.option._
 import org.apache.poi.hssf.usermodel.{HSSFRow, HSSFSheet}
 import org.apache.poi.ss.usermodel.{Cell, DateUtil}
 
-
+/** XLS spreadsheet represented by a state transformer
+  */
 object Sheet {
 
+  /** A source of Option[(Int, Seq[CellValue])] values as a state transformer
+    */
   type Source[S] = StateT[Option, S, (Int, Seq[CellValue])]
 
   private def getCellValues(row: HSSFRow): Seq[CellValue] = {
@@ -41,8 +44,14 @@ object Sheet {
     }
   }
 
+  /** XLS file state
+    *
+    * Comprises reference to an HSSFSheet instance and a row index
+    */
   final case class State(sheet: HSSFSheet, rowIndex: Int) {
 
+    /* Get next non-empty row. We skip empty rows, although the row index
+     * increases! */
     def nextRow: Option[(State, (Int, Seq[CellValue]))] = {
 
       implicit val rowOptMonoid = MonoidK[Option].algebra[(Int,HSSFRow)]
@@ -63,9 +72,13 @@ object Sheet {
     }
   }
 
+  /** A [[Source]] for [[State]]
+    */
   def source: Source[State] =
     StateT(_.nextRow)
 
+  /** Get the initial [[State]] instance for an XLS file worksheet
+    */
   def initial(sheet: HSSFSheet): State =
     State(sheet, sheet.getFirstRowNum)
 }

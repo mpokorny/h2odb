@@ -374,7 +374,7 @@ object SwingApp extends SimpleSwingApplication {
 
       connection.setAutoCommit(false)
 
-      sql.DBFiller(connection).
+      sql.DbFiller(connection).
         leftMap(NonEmptyList(_)).
         flatMap(_.getFromWorkbook(xls)).
         fold(

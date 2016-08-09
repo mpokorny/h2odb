@@ -81,28 +81,40 @@ trait Tables {
     val labId           = "WCLab_ID"
     val analysesAgency  = "AnalysesAgency"
 
-    /** Value of AnalysesAgency db column */
+    /** Value of AnalysesAgency db column
+      */
     val analysesAgencyDefault = "NMBGMR"
 
-    /** Name of "chemistry sample info" table */
+    /** Name of "chemistry sample info" table
+      */
     val chemistrySampleInfo: String
 
-    /** Name of "major chemistry" table */
+    /** Name of "major chemistry" table
+      */
     val majorChemistry: String
 
-    /** Name of "minor chemistry" table */
+    /** Name of "minor chemistry" table
+      */
     val minorChemistry: String
 
+    /** Suffix used to mark total analyte values
+      */
     val totalAnalyteSuffix = "(total)"
 
+    /** Convert total or base (non-total) analyte string to total analyte string
+      */
     def totalAnalyte(s: String): String =
       if (s.endsWith(totalAnalyteSuffix)) s
       else s + totalAnalyteSuffix
 
+    /** Convert total or base analyte string to base analyte string
+      */
     def baseAnalyte(s: String): String =
       s.stripSuffix(totalAnalyteSuffix)
   }
 
+  /** DbInfo instance
+    */
   val dbInfo: DbInfo
 
   /** Map from XLS "Param" values to DB "AnalysisMethod" values

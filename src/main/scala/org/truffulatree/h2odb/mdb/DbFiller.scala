@@ -16,10 +16,10 @@ import cats.syntax.foldable._
 import com.healthmarketscience.jackcess.{Database, Table}
 import org.truffulatree.h2odb
 
-class DBFiller(val db: Database, dbTables: Map[String, Table])
-    extends h2odb.DBFiller[DbRecord] with Tables {
+class DbFiller(val db: Database, dbTables: Map[String, Table])
+    extends h2odb.DbFiller[DbRecord] with Tables {
 
-  import h2odb.DBFiller._
+  import h2odb.DbFiller._
 
   val majorChemistry = dbTables(dbInfo.majorChemistry)
 
@@ -139,7 +139,7 @@ class DBFiller(val db: Database, dbTables: Map[String, Table])
   }
 }
 
-object DBFiller extends Tables {
+object DbFiller extends Tables {
   def getTables(db: Database): Xor[NonEmptyList[String], Map[String, Table]] = {
 
     def getTable(name: String): Xor[String, Table] =

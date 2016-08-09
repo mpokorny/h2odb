@@ -12,12 +12,27 @@ import cats.std.list._
 import cats.std.option._
 import org.truffulatree.h2odb.xls._
 
+/** Definitions for reading water analysis report Excel files
+  */
 object AnalysisReport {
 
+  /** A validated row (record) from a water analysis report
+    *
+    * The first element of the pair is the line number of the row in the Excel
+    * file.
+    */
   type Row = (Int, ValidatedNel[Error, AnalysisRecord])
 
+  /** StateT producing a value of type Option[Row]
+    *
+    * @tparam S state
+    */
   type Source[S] = StateT[Option, S, Row]
 
+  /** StateT for an analysis report
+    *
+    * @tparam S XLS sheet (state)
+    */
   def source[S : Sheet.Source]: Source[Table.State[S]] = {
     Table.source[S].map { case (i@_, vmap@_) =>
       val vrec =
@@ -28,8 +43,13 @@ object AnalysisReport {
     }
   }
 
+  /** Representation of a water analysis report as a state transformer and an
+    * initial state.
+    */
   final case class Doc[S, A](source: StateT[Option, S, A], initial: S)
 
+  /** [[root.cats.Foldable]] instance for [[Doc]]
+    */
   implicit def docFoldable[S]: Foldable[Doc[S, ?]] =
     new Foldable[Doc[S, ?]] {
 
@@ -61,12 +81,35 @@ object AnalysisReport {
       }
     }
 
+  /** Analysis report errors
+    */
   sealed trait Error
+
+  /** Table.InvalidHeader error analog
+    *
+    * @see [[xls.Table.InvalidHeader]]
+    */
   final case class InvalidHeader(columns: Seq[Int]) extends Error
+
+  /** Table.CellType error analog
+    *
+    * @see [[xls.Table.CellType]]
+    */
   final case class CellType(column: Int, expectedType: String) extends Error
+
+  /** AnalysisReport.MissingField error analog
+    *
+    * @see [[AnalysisReport.MissingField]]
+    */
   final case class MissingField(name: String) extends Error
+
+  /** AnalysisReport.FieldType error analog
+    *
+    * @see [[AnalysisReport.FieldType]]
+    */
   final case class FieldType(name: String) extends Error
 
+  // convert table error to AnalysisReport error
   def xlsError(err: Table.Error): Error = err match {
       case Table.InvalidHeader(columns@_) =>
         InvalidHeader(columns)
@@ -75,6 +118,7 @@ object AnalysisReport {
         CellType(col, typ)
     }
 
+  // convert record error to AnalysisReport error
   def recordError(err: AnalysisRecord.Error): Error = err match {
       case AnalysisRecord.MissingField(name@_) =>
         MissingField(name)

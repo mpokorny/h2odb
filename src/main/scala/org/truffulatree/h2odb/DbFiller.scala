@@ -14,9 +14,9 @@ import cats.syntax.foldable._
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
 import play.api.Logger
 
-abstract class DBFiller[A <: DbRecord] extends Tables {
+abstract class DbFiller[A <: DbRecord] extends Tables {
 
-  import DBFiller._
+  import DbFiller._
 
   protected val logger = Logger(getClass.getName.init)
 
@@ -58,7 +58,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
 
     val dbRecordSource =
       recordSource map { case (i@_, vrec@_) =>
-        /* convert errors to DBFiller Errors */
+        /* convert errors to DbFiller Errors */
         (i, vrec.leftMap(_ map(fromAnalysisReportError)))
       } map { case (i@_, vrec@_) =>
           /* validate AnalysisRecord, then convert to A, then validate A */
@@ -223,7 +223,7 @@ abstract class DBFiller[A <: DbRecord] extends Tables {
 
 }
 
-object DBFiller {
+object DbFiller {
 
   trait Error {
     def message: String

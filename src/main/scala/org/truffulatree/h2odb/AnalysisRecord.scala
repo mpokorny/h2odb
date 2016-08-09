@@ -14,6 +14,8 @@ import cats.std.list._
 import cats.syntax.option._
 import org.truffulatree.h2odb.xls._
 
+/** Representation of a record from a water analysis report
+  */
 final case class AnalysisRecord(
   parameter: String,
   test: String,
@@ -28,6 +30,12 @@ final case class AnalysisRecord(
   analysisTime: Date)
 
 object AnalysisRecord {
+
+  /** Convert a row from a water analysis report into an [[AnalysisRecord]]
+    *
+    * The only validation is to check for the existence of required field
+    * values, and to check their types against what is expected.
+    */
   def fromXlsRow(row: Map[String, CellValue]):
       ValidatedNel[Error, AnalysisRecord] = {
 
@@ -85,7 +93,15 @@ object AnalysisRecord {
     }
   }
 
+  /** Record conversion error
+    */
   sealed trait Error
+
+  /** Missing field value (when one is required)
+    */
   final case class MissingField(name: String) extends Error
+
+  /** Field value has wrong type
+    */
   final case class FieldType(name: String) extends Error
 }

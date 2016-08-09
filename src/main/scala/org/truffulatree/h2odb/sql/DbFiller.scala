@@ -15,17 +15,18 @@ import cats.std.list._
 import cats.syntax.all._
 import org.truffulatree.h2odb
 
-class DBFiller(
+class DbFiller(
   override protected val existingSamples: Set[(String, String)],
-  private val guids: Map[String, String])(implicit val connection: Connection)
-    extends h2odb.DBFiller[DbRecord] with Tables {
+  guids: Map[String, String])(implicit val connection: Connection)
+    extends h2odb.DbFiller[DbRecord] with Tables {
 
-  import h2odb.DBFiller._
+  import h2odb.DbFiller._
 
   /** Convert xls records to database table format
     *
-    * Convert a (single) [[AnalysisRecord]] into a [[DbRecord]]. The resulting
-    * [[DbRecord]] is ready for addition to the appropriate database table.
+    * Convert a (single) [[h2odb.AnalysisRecord]] into a [[DbRecord]]. The
+    * resulting [[DbRecord]] is ready for addition to the appropriate database
+    * table.
     *
     * @return        [[DbRecord]] derived from record
     */
@@ -153,11 +154,16 @@ class DBFiller(
       dbInfo.units -> record.units)
 }
 
-object DBFiller extends Tables {
+object DbFiller extends Tables {
 
-  type DbError = h2odb.DBFiller.DbError
+  type DbError = h2odb.DbFiller.DbError
 
-  def apply(implicit connection: Connection): Xor[DbError, DBFiller] = {
+  /** Create a [[DbFiller]] instance with the provided [[java.sql.Connection]].
+    *
+    * This method attempts to query several tables in the database, and returns
+    * an error as soon as any of those queries fails.
+    */
+  def apply(implicit connection: Connection): Xor[DbError, DbFiller] = {
 
     val existingSamples: Xor[DbError, Set[(String,String)]] = {
       val samplePointIdCol = dbInfo.samplePointId
@@ -169,6 +175,9 @@ object DBFiller extends Tables {
           case (samplePointId@_) ~ (analyte@_) =>
             (samplePointId -> analyte)
         }
+
+      /* We wish to avoid the second query if the first fails, so use Eval-wrapped
+       * queries and traverse the list of queries monadically */
 
       def getSamples(table: String): Eval[Xor[Throwable, List[(String,String)]]] =
         Eval.always(
@@ -183,7 +192,7 @@ object DBFiller extends Tables {
           map(tb => getSamples(tb))
 
       samples.traverseU(_.value)
-        .bimap(h2odb.DBFiller.DbError, _.flatten.toSet)
+        .bimap(h2odb.DbFiller.DbError, _.flatten.toSet)
     }
 
     lazy val guids: Xor[DbError, Map[String, String]] = {
@@ -204,9 +213,9 @@ object DBFiller extends Tables {
             FROM #${dbInfo.chemistrySampleInfo}"""
             .as(parser.*))
 
-      pairs.bimap(h2odb.DBFiller.DbError, _.toMap)
+      pairs.bimap(h2odb.DbFiller.DbError, _.toMap)
     }
 
-    existingSamples >>= (es => guids map (gs => new DBFiller(es, gs)))
+    existingSamples >>= (es => guids map (gs => new DbFiller(es, gs)))
   }
 }

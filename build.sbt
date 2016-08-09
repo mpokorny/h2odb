@@ -27,7 +27,8 @@ libraryDependencies ++= Seq(
     jdbc,
     "org.apache.poi" % "poi" % "3.14",
     "org.scala-lang.modules" %% "scala-swing" % "2.0.0-M2",
-    "org.typelevel" %% "cats" % "0.6.0")
+    "org.typelevel" %% "cats" % "0.6.0",
+    "org.scalatest" %% "scalatest" % "3.0.0" % "test")
 
 resolvers ++= Seq(
     "snapshots" at "https://oss.sonatype.org/content/repositories/snapshots",

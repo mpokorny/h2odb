@@ -377,13 +377,13 @@ object SwingApp extends SimpleSwingApplication {
 
           def apply[S] ={
             val transaction: sql.SQL.Result[S, DbFiller.Error, Seq[String]] =
-              for {
-                conn <- sql.ConnectionRef[S, DbFiller.Error](ds)
-                _ <- conn.setAutoCommit(false)
-                filler <- sql.DbFiller(conn)
-                msgs <- conn.commitOnSuccess(None)(filler.getFromWorkbook(xls))
-                _ <- conn.close
-              } yield msgs
+              sql.SQL.withOwnConnection(ds) { conn =>
+                for {
+                  _ <- conn.setAutoCommit(false)
+                  filler <- sql.DbFiller(conn)
+                  msgs <- conn.commitOnSuccess(None)(filler.getFromWorkbook(xls))
+                } yield msgs
+              }
 
             transaction.fold(exs => exs.unwrap.map(_.message), res => res)
           }

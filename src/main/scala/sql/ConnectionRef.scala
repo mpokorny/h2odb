@@ -111,6 +111,9 @@ final class ConnectionRef[S, E : SQL.ErrorContext] protected
     rollbackOnException(savepointName)(a) flatMap { result =>
       commit map (_ => result)
     }
+
+  def closeOnCompletion[A](a: Result[A]): Result[A] =
+    XorT[ST, NonEmptyList[E], A](a.value.map(xa => { close; xa }))
 }
 
 object ConnectionRef {

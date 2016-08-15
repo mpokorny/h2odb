@@ -7,6 +7,7 @@
 package org.truffulatree.h2odb.sql
 
 import java.sql.SQLException
+import javax.sql.DataSource
 
 import cats.data.{NonEmptyList, State, Xor, XorT}
 import cats.std.list._
@@ -23,6 +24,15 @@ object SQL {
   def catchEx[A, B](a: => A)(implicit B: ErrorContext[B]): Xor[NonEmptyList[B], A] =
     Xor.catchOnly[SQLException](a).
       leftMap(ex => NonEmptyList(B.fromSQLException(ex)))
+
+  def withOwnConnection[S, E : ErrorContext, A](
+    dataSource: DataSource)(
+    fn: ConnectionRef[S, E] => Result[S, E, A]):
+      Result[S, E, A] = {
+    ConnectionRef[S, E](dataSource) flatMap { conn =>
+      conn.closeOnCompletion(fn(conn))
+    }
+  }
 
   trait ErrorContext[A] {
     def fromSQLException(e: SQLException): A

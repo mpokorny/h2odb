@@ -9,16 +9,33 @@ package org.truffulatree.h2odb.sql
 import java.sql.SQLException
 
 import cats.data.{NonEmptyList, State, Xor, XorT}
+import cats.std.list._
 
 object SQL {
   type Exceptions = NonEmptyList[SQLException]
 
-  type Result[S, A] = XorT[State[S, ?], Exceptions, A]
+  type Result[S, A, B] = XorT[State[S, ?], NonEmptyList[A], B]
 
-  type Fun1[S, A, B] = A => Result[S, B]
+  type Fun1[S, A, B, C] = B => Result[S, A, C]
 
-  type Fun2[S, A, B, C] = A => B => Result[S, C]
+  type Fun2[S, A, B, C, D] = B => C => Result[S, A, D]
 
-  def catchEx[A](a: => A): Xor[SQL.Exceptions, A] =
-    Xor.catchOnly[SQLException](a).leftMap(NonEmptyList(_))
+  def catchEx[A, B](a: => A)(implicit B: ErrorContext[B]): Xor[NonEmptyList[B], A] =
+    Xor.catchOnly[SQLException](a).
+      leftMap(ex => NonEmptyList(B.fromSQLException(ex)))
+
+  trait ErrorContext[A] {
+    def fromSQLException(e: SQLException): A
+
+    def fromSQLExceptions(
+      es: NonEmptyList[SQLException]): NonEmptyList[A] =
+      es map fromSQLException
+  }
+  
+  trait Runnable[A] {
+    def apply[S]: State[S, A]
+
+    def run: A =
+      apply[Unit].run(()).value._2
+  }
 }

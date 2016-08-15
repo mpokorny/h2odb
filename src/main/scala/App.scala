@@ -14,13 +14,13 @@ import java.sql.SQLException
 import scala.swing._
 import scala.swing.event._
 
-import cats.data.{NonEmptyList, Xor}
+import cats.Eval
+import cats.data.{NonEmptyList, State, Xor, XorT}
 import cats.std.list._
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
 import javax.swing.filechooser.FileNameExtensionFilter
 import org.apache.poi.hssf.usermodel.HSSFWorkbook
-import org.jdbcdslog.ConnectionLoggingProxy
 
 object PopupMenu {
   private[PopupMenu] trait JPopupMenuMixin { def popupMenuWrapper: PopupMenu }
@@ -370,25 +370,26 @@ object SwingApp extends SimpleSwingApplication {
             }
         }
 
-      val connection = ConnectionLoggingProxy.wrap(ds.getConnection)
+      val results =
+        new sql.SQL.Runnable[Seq[String]] {
 
-      connection.setAutoCommit(false)
+          import sql.DbFiller.ErrorContext
 
-      sql.DbFiller(connection).
-        leftMap(NonEmptyList(_)).
-        flatMap(_.getFromWorkbook(xls)).
-        fold(
-          errs => {
-            connection.rollback
+          def apply[S] ={
+            val transaction: sql.SQL.Result[S, DbFiller.Error, Seq[String]] =
+              for {
+                conn <- sql.ConnectionRef[S, DbFiller.Error](ds)
+                _ <- conn.setAutoCommit(false)
+                filler <- sql.DbFiller(conn)
+                msgs <- conn.commitOnSuccess(None)(filler.getFromWorkbook(xls))
+                _ <- conn.close
+              } yield msgs
 
-            errs.unwrap.map(_.message)
-          },
-          results => {
-            connection.commit
+            transaction.fold(exs => exs.unwrap.map(_.message), res => res)
+          }
+        }
 
-            results
-          }).
-        foreach(str => resultsFrame.textArea.append(str + "\n"))
+      results.run.foreach(str => resultsFrame.textArea.append(str + "\n"))
 
       xlsFile.close
 

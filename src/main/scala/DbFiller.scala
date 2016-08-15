@@ -6,17 +6,23 @@
 //
 package org.truffulatree.h2odb
 
+import scala.language.higherKinds
+
 import cats._
 import cats.data._
 import cats.std.list._
 import cats.std.option._
-import cats.syntax.foldable._
-import org.apache.poi.hssf.usermodel.HSSFWorkbook
+import cats.syntax.all._
+import org.apache.poi.hssf.usermodel.{HSSFSheet, HSSFWorkbook}
 import play.api.Logger
 
-abstract class DbFiller[A <: DbRecord] extends Tables {
+abstract class DbFiller[A <: DbRecord, M[_]](implicit M: Monad[M]) extends Tables {
 
   import DbFiller._
+
+  type XM[X] = XorT[M, NonEmptyList[DbFiller.Error], X]
+
+  val XME = XorT.xorTMonadError[M, NonEmptyList[DbFiller.Error]]
 
   protected val logger = Logger(getClass.getName.init)
 
@@ -40,16 +46,17 @@ abstract class DbFiller[A <: DbRecord] extends Tables {
     */
   protected val existingSamples: Set[(String,String)]
 
-  def getFromWorkbook(workbook: HSSFWorkbook):
-      Xor[NonEmptyList[Error], Seq[String]] = {
-    val worksheet =
+  def getFromWorkbook(workbook: HSSFWorkbook): XM[Seq[String]] = {
+    val worksheet: XM[HSSFSheet] =
       Xor.catchOnly[IllegalArgumentException](workbook.getSheetAt(0)).
-        leftMap(_ => NonEmptyList(InvalidSheet(0): Error))
+        fold(
+          ex => XME.raiseError[HSSFSheet](NonEmptyList(InvalidSheet(0): Error)),
+          sh => XME.pure(sh))
 
-    worksheet.flatMap(sh => processRows(xls.Table.initial(sh)))
+    worksheet >>= (sh => processRows(xls.Table.initial(sh)))
   }
 
-  def processRows(sheet: TState[SState]): Xor[NonEmptyList[Error], Seq[String]] = {
+  def processRows(sheet: TState[SState]): XM[Seq[String]] = {
 
     implicit val sheetSource = xls.Sheet.source
 
@@ -79,9 +86,14 @@ abstract class DbFiller[A <: DbRecord] extends Tables {
           case (r@_, evr@_) => evr map (vr => accumulateValidatedDbRecord(vr, r))
         }
 
-    vDbRecords.value.
-      leftMap(_.map { case (r, e) => XlsValidationError(r, e): Error }).
-      flatMap(recAcc => processDbRecords(recAcc.values.toSeq))
+    val fRecords =
+      vDbRecords.value.
+        fold(
+          exs => XME.raiseError(
+            exs.map { case (r, e) => XlsValidationError(r, e): Error }),
+          recAcc => XME.pure(recAcc))
+
+    fRecords >>= (recAcc => processDbRecords(recAcc.values.toSeq))
   }
 
   private[this] def accumulateDbRecord(acc: DbRecordAcc, rec: A): DbRecordAcc = {
@@ -148,20 +160,18 @@ abstract class DbFiller[A <: DbRecord] extends Tables {
       s"ERROR: in XLS file, row $i: " + err.message
     }
 
-  private[this] def processDbRecords(records: Seq[A]):
-      Xor[NonEmptyList[Error], Seq[String]] = {
+  private[this] def processDbRecords(records: Seq[A]): XM[Seq[String]] = {
 
     if (!records.isEmpty) {
 
       logger.debug(records.mkString("\n"))
 
       /* add rows to database */
-      addToDb(records).bimap(
-        err => NonEmptyList(err),
+      addToDb(records).map(
         recs => (showAdded(recs) :+ "----------") ++ showQuality(recs))
 
     } else {
-      Xor.right(Seq("Added 0 rows to database"))
+      XME.pure(Seq("Added 0 rows to database"))
     }
 
   }
@@ -205,7 +215,7 @@ abstract class DbFiller[A <: DbRecord] extends Tables {
     * Records should stop being inserted as soon as an error occurs; therefore,
     * only one error value may be returned.
     */
-  protected def addToDb(records: Seq[A]): Xor[DbError, Seq[A]]
+  protected def addToDb(records: Seq[A]): XM[Seq[A]]
 
   def fromAnalysisReportError(err: AnalysisReport.Error): Error = err match {
       case AnalysisReport.InvalidHeader(columns@_) =>
@@ -299,4 +309,3 @@ object DbFiller {
       s"ERROR: Database error: ${th.getMessage}"
   }
 }
-

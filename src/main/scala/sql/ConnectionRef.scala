@@ -6,30 +6,37 @@
 //
 package org.truffulatree.h2odb.sql
 
-import java.sql.{Connection, Savepoint, SQLException}
+import java.sql.{Connection, Savepoint}
+import javax.sql.DataSource
 
 import scala.concurrent.duration.Duration
 
+import cats.Eval
 import cats.data.{NonEmptyList, State, Xor, XorT}
 import cats.std.list._
 import cats.syntax.all._
+  //import org.jdbcdslog.ConnectionLoggingProxy
 
-final class ConnectionRef[S] protected (conn: => Xor[SQL.Exceptions, Connection]) {
+final class ConnectionRef[S, E : SQL.ErrorContext] protected
+  (dataSource: DataSource) {
   self =>
+
+  val E = implicitly[SQL.ErrorContext[E]]
 
   type ST[A] = State[S, A]
 
-  type Result[A] = SQL.Result[S, A]
+  type Result[A] = SQL.Result[S, E, A]
 
-  type Fun1[A, B] = SQL.Fun1[S, A, B]
+  type Fun1[A, B] = SQL.Fun1[S, E, A, B]
 
-  val connection: Result[Connection] = XorT.fromXor[ST](conn)
+  val connection: Result[Connection] =
+    XorT.fromXor[ST](SQL.catchEx(dataSource.getConnection))
 
   private[this] def apply0[A](conn: Connection => A) =
-    ConnectionRef.lift0(conn)(self)
+    ConnectionRef.lift0(conn)(E)(self)
 
   private[this] def apply1[A, B](conn: Connection => A => B) =
-    ConnectionRef.lift1(conn)(self)
+    ConnectionRef.lift1(conn)(E)(self)
 
   def close: Result[Unit] =
     apply0(_.close())
@@ -48,7 +55,7 @@ final class ConnectionRef[S] protected (conn: => Xor[SQL.Exceptions, Connection]
 
   def rollback: Fun1[Option[SavepointRef[S]], Unit] = {
     val spRef2sp: Fun1[Option[SavepointRef[S]], Option[Savepoint]] = { ospr =>
-      XorT.right[ST, SQL.Exceptions, Option[Savepoint]](
+      XorT.right[ST, NonEmptyList[E], Option[Savepoint]](
         ospr.map(spr => spr.savepoint.map(_.some)).
           getOrElse(State.pure(none[Savepoint])))
     }
@@ -74,13 +81,13 @@ final class ConnectionRef[S] protected (conn: => Xor[SQL.Exceptions, Connection]
       }
 
     val spRef: Fun1[Savepoint, SavepointRef[S]] =
-      sp => XorT.right[ST, SQL.Exceptions, SavepointRef[S]](SavepointRef(sp))
+      sp => XorT.right[ST, NonEmptyList[E], SavepointRef[S]](SavepointRef(sp))
 
     optName => setSp(optName) flatMap spRef
   }
 
   def releaseSavepoint: Fun1[SavepointRef[S], Unit] = { spr =>
-    XorT.right[ST, SQL.Exceptions, Savepoint](spr.savepoint).
+    XorT.right[ST, NonEmptyList[E], Savepoint](spr.savepoint).
       flatMap(apply1(c => (sp: Savepoint) => c.releaseSavepoint(sp)))
   }
 
@@ -89,7 +96,7 @@ final class ConnectionRef[S] protected (conn: => Xor[SQL.Exceptions, Connection]
     setSavepoint(savepointName) flatMap { spr =>
       val result =
         a.swap.flatMap(
-          ex => XorT.right[ST, A, SQL.Exceptions](
+          ex => XorT.right[ST, A, NonEmptyList[E]](
             rollback(Some(spr)).
               fold(ex1 => ex combine ex1, _ => ex))).swap
 
@@ -107,28 +114,29 @@ final class ConnectionRef[S] protected (conn: => Xor[SQL.Exceptions, Connection]
 }
 
 object ConnectionRef {
-  def apply[S](connection: => Xor[SQL.Exceptions, Connection]):
-      State[S, ConnectionRef[S]] =
-    State.pure(new ConnectionRef[S](connection))
+  def apply[S, A : SQL.ErrorContext](dataSource: DataSource):
+      SQL.Result[S, A, ConnectionRef[S, A]] =
+    XorT.right[State[S, ?], NonEmptyList[A], ConnectionRef[S, A]](
+      State.pure(new ConnectionRef[S, A](dataSource)))
 
-  def lift0[S, A, B](fn: Connection => A):
-      ConnectionRef[S] => SQL.Result[S, A] = { cRef =>
+  def lift0[S, A : SQL.ErrorContext, B](fn: Connection => B):
+      ConnectionRef[S, A] => SQL.Result[S, A, B] = { cRef =>
     cRef.connection flatMap { c =>
       XorT.fromXor[State[S, ?]](SQL.catchEx(fn(c)))
     }
   }
 
-  def lift1[S, A, B](fn: Connection => A => B):
-      ConnectionRef[S] => SQL.Fun1[S, A, B] = { cRef => a =>
+  def lift1[S, A : SQL.ErrorContext, B, C](fn: Connection => B => C):
+      ConnectionRef[S, A] => SQL.Fun1[S, A, B, C] = { cRef => b =>
     cRef.connection flatMap { conn =>
-      XorT.fromXor[State[S, ?]](SQL.catchEx(fn(conn)(a)))
+      XorT.fromXor[State[S, ?]](SQL.catchEx(fn(conn)(b)))
     }
   }
 
-  def lift2[S, A, B, C](fn: Connection => A => B => C):
-      ConnectionRef[S] => SQL.Fun2[S, A, B, C] = { cRef => a => b =>
+  def lift2[S, A : SQL.ErrorContext, B, C, D](fn: Connection => B => C => D):
+      ConnectionRef[S, A] => SQL.Fun2[S, A, B, C, D] = { cRef => b => c =>
     cRef.connection flatMap { conn =>
-      XorT.fromXor[State[S, ?]](SQL.catchEx(fn(conn)(a)(b)))
+      XorT.fromXor[State[S, ?]](SQL.catchEx(fn(conn)(b)(c)))
     }
   }
 }

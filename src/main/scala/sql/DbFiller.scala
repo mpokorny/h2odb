@@ -6,7 +6,9 @@
 //
 package org.truffulatree.h2odb.sql
 
-import java.sql.Connection
+import java.sql.{Connection, SQLException}
+
+import scala.language.higherKinds
 
 import anorm._
 import cats._
@@ -15,10 +17,12 @@ import cats.std.list._
 import cats.syntax.all._
 import org.truffulatree.h2odb
 
-class DbFiller(
+class DbFiller[S](
   override protected val existingSamples: Set[(String, String)],
-  guids: Map[String, String])(implicit val connection: Connection)
-    extends h2odb.DbFiller[DbRecord] with Tables {
+  guids: Map[String, String])(
+  implicit val connection: ConnectionRef[S, h2odb.DbFiller.Error],
+  errorContext: SQL.ErrorContext[h2odb.DbFiller.Error])
+    extends h2odb.DbFiller[DbRecord, State[S, ?]] with Tables {
 
   import h2odb.DbFiller._
 
@@ -88,7 +92,7 @@ class DbFiller(
     }
   }
 
-  override def addToDb(records: Seq[DbRecord]): Xor[DbError, Seq[DbRecord]] = {
+  override def addToDb(records: Seq[DbRecord]): DbFiller.Result[S, Seq[DbRecord]] = {
     val inserts =
       records.groupBy(_.table).toList map { case (table, recs) =>
 
@@ -97,15 +101,15 @@ class DbFiller(
         logger.
           debug(namedParameters.map(_.toString + " -> " + table).mkString("\n"))
 
-        Eval.always(addToTable(table, namedParameters).bimap(DbError, _ => recs))
+        addToTable(table, namedParameters).map(_ => recs)
       }
 
-    inserts.traverseU(_.value).map(_.flatten)
+    XME.sequence(inserts).map(_.flatten)
   }
 
   private[this] def addToTable(
     table: String,
-    records: Seq[Seq[NamedParameter]]): Xor[Throwable, Unit] = {
+    records: Seq[Seq[NamedParameter]]): DbFiller.Result[S, Unit] = {
     val insert = s"""
         INSERT INTO $table (
           ${dbInfo.analysesAgency},
@@ -130,13 +134,17 @@ class DbFiller(
           {${dbInfo.symbol}},
           {${dbInfo.units}})"""
 
-    Xor.catchNonFatal(
-      records match {
-        case Seq(head@_, tail@_*) =>
-          BatchSql(insert, head, tail:_*).execute()
+    records match {
+      case Seq(head@_, tail@_*) =>
+        val batch =
+          ConnectionRef.lift0[S, Error, Array[Int]](
+            BatchSql(insert, head, tail:_*).execute()(_))
 
-        case Seq() =>
-      })
+        batch(connection).map(_ => ())
+
+      case Seq() =>
+        XorT.fromXor[State[S, ?]](Xor.right(()))
+    }
   }
 
 
@@ -156,16 +164,19 @@ class DbFiller(
 
 object DbFiller extends Tables {
 
-  type DbError = h2odb.DbFiller.DbError
+  type Error = h2odb.DbFiller.Error
+
+  type Result[S, A] = SQL.Result[S, Error, A]
 
   /** Create a [[DbFiller]] instance with the provided [[java.sql.Connection]].
     *
     * This method attempts to query several tables in the database, and returns
     * an error as soon as any of those queries fails.
     */
-  def apply(implicit connection: Connection): Xor[DbError, DbFiller] = {
+  def apply[S](connection: ConnectionRef[S, Error])(
+    implicit errorContext: SQL.ErrorContext[Error]): Result[S, DbFiller[S]] = {
 
-    val existingSamples: Xor[DbError, Set[(String,String)]] = {
+    def existingSamples: Result[S, Set[(String,String)]] = {
       val samplePointIdCol = dbInfo.samplePointId
 
       val analyteCol = dbInfo.analyte
@@ -176,26 +187,30 @@ object DbFiller extends Tables {
             (samplePointId -> analyte)
         }
 
-      /* We wish to avoid the second query if the first fails, so use Eval-wrapped
-       * queries and traverse the list of queries monadically */
-
-      def getSamples(table: String): Eval[Xor[Throwable, List[(String,String)]]] =
-        Eval.always(
-          Xor.catchNonFatal(
+      def getSamples(table: String): Result[S, List[(String, String)]] = {
+        val query =
+          ConnectionRef.lift0[S, Error, List[(String, String)]](
             SQL"""
-            SELECT #$samplePointIdCol, #$analyteCol FROM #$table
-            WHERE #$analyteCol IS NOT NULL"""
-              .as(parser.*)))
+               SELECT #$samplePointIdCol, #$analyteCol FROM #$table
+               WHERE #$analyteCol IS NOT NULL"""
+              .as(parser.*)(_))
 
-      val samples =
-        List(dbInfo.majorChemistry, dbInfo.minorChemistry).
-          map(tb => getSamples(tb))
+        query(connection)
+      }
 
-      samples.traverseU(_.value)
-        .bimap(h2odb.DbFiller.DbError, _.flatten.toSet)
+      getSamples(dbInfo.majorChemistry) flatMap { s1 =>
+        getSamples(dbInfo.minorChemistry) map (s2 => (s1 ++ s2).toSet)
+      }
+
+      val M = XorT.xorTMonadError[State[S, ?], NonEmptyList[Error]]
+
+      M.traverse(
+        List(dbInfo.majorChemistry, dbInfo.minorChemistry))(
+        getSamples).
+        map(_.flatten.toSet)
     }
 
-    lazy val guids: Xor[DbError, Map[String, String]] = {
+    def guids: Result[S, Map[String, String]] = {
       val samplePointIdCol = dbInfo.samplePointId
 
       val samplePointGUIDCol = dbInfo.samplePointGUID
@@ -207,15 +222,23 @@ object DbFiller extends Tables {
         }
 
       val pairs =
-        Xor.catchNonFatal(
+        ConnectionRef.lift0[S, Error, List[(String, String)]](
           SQL"""
             SELECT #$samplePointIdCol, #$samplePointGUIDCol
             FROM #${dbInfo.chemistrySampleInfo}"""
-            .as(parser.*))
+            .as(parser.*)(_))
 
-      pairs.bimap(h2odb.DbFiller.DbError, _.toMap)
+      pairs(connection).map(_.toMap) 
     }
 
-    existingSamples >>= (es => guids map (gs => new DbFiller(es, gs)))
+    existingSamples flatMap { es =>
+      guids map (gs =>
+        new DbFiller(es, gs)(connection, errorContext))
+    }
   }
+
+  implicit object ErrorContext extends SQL.ErrorContext[h2odb.DbFiller.Error] {
+      override def fromSQLException(e: SQLException): h2odb.DbFiller.Error =
+        h2odb.DbFiller.DbError(e)
+    }
 }

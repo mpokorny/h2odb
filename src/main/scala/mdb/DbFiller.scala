@@ -17,7 +17,7 @@ import com.healthmarketscience.jackcess.{Database, Table}
 import org.truffulatree.h2odb
 
 class DbFiller(val db: Database, dbTables: Map[String, Table])
-    extends h2odb.DbFiller[DbRecord] with Tables {
+    extends h2odb.DbFiller[DbRecord, Id] with Tables {
 
   import h2odb.DbFiller._
 
@@ -123,9 +123,11 @@ class DbFiller(val db: Database, dbTables: Map[String, Table])
     }
   }
 
-  override def addToDb(records: Seq[DbRecord]): Xor[DbError, Seq[DbRecord]] =
+  override def addToDb(records: Seq[DbRecord]): XM[Seq[DbRecord]] =
     (records.toList traverseU_ addToTable).
-      bimap(th => DbError(th), _ => { db.flush(); records })
+      fold(
+        th => XME.raiseError(NonEmptyList(DbError(th))),
+        _ => XME.pure({ db.flush(); records }))
 
   protected def addToTable(record: DbRecord): Xor[Throwable, Unit] = {
     val colNames = tableColumns.getOrElse(record.table, Seq.empty)

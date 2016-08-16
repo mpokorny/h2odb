@@ -9,13 +9,11 @@ package org.truffulatree.h2odb
 import java.awt.{Cursor, Dimension, Font}
 import java.awt.datatransfer.StringSelection
 import java.io.{File, FileInputStream}
-import java.sql.SQLException
 
 import scala.swing._
 import scala.swing.event._
 
-import cats.Eval
-import cats.data.{NonEmptyList, State, Xor, XorT}
+import cats.data.Xor
 import cats.std.list._
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource
 import javax.swing.JPopupMenu
@@ -375,9 +373,9 @@ object SwingApp extends SimpleSwingApplication {
 
           import sql.DbFiller.ErrorContext
 
-          def apply[S] ={
+          override protected def apply[S] = {
             val transaction: sql.SQL.Result[S, DbFiller.Error, Seq[String]] =
-              sql.SQL.withOwnConnection(ds) { conn =>
+              sql.SQL.withConnection(ds) { conn =>
                 for {
                   _ <- conn.setAutoCommit(false)
                   filler <- sql.DbFiller(conn)
@@ -402,15 +400,6 @@ object SwingApp extends SimpleSwingApplication {
         Dialog.showOptions(
           message = oe.getMessage,
           title = "File Error",
-          optionType = Dialog.Options.Default,
-          messageType = Dialog.Message.Error,
-          entries = List("OK"),
-          initial = 0)
-
-      case se: SQLException =>
-        Dialog.showOptions(
-          message = se.getMessage,
-          title = "Database Error",
           optionType = Dialog.Options.Default,
           messageType = Dialog.Message.Error,
           entries = List("OK"),

@@ -11,14 +11,15 @@ import javax.sql.DataSource
 
 import scala.concurrent.duration.Duration
 
-import cats.Eval
+import cats.Show
 import cats.data.{NonEmptyList, State, Xor, XorT}
 import cats.std.list._
 import cats.syntax.all._
-  //import org.jdbcdslog.ConnectionLoggingProxy
+import play.api.Logger
+import org.jdbcdslog.ConnectionLoggingProxy
 
-final class ConnectionRef[S, E : SQL.ErrorContext] protected
-  (dataSource: DataSource) {
+final class ConnectionRef[S, E] protected
+  (dataSource: DataSource)(implicit EC: SQL.ErrorContext[E], ES: Show[E]) {
   self =>
 
   val E = implicitly[SQL.ErrorContext[E]]
@@ -29,8 +30,11 @@ final class ConnectionRef[S, E : SQL.ErrorContext] protected
 
   type Fun1[A, B] = SQL.Fun1[S, E, A, B]
 
+  private[this] val logger = Logger(getClass.getName.init)
+
   val connection: Result[Connection] =
-    XorT.fromXor[ST](SQL.catchEx(dataSource.getConnection))
+    XorT.fromXor[ST](
+      SQL.catchEx(ConnectionLoggingProxy.wrap(dataSource.getConnection)))
 
   private[this] def apply0[A](conn: Connection => A) =
     ConnectionRef.lift0(conn)(E)(self)
@@ -100,9 +104,12 @@ final class ConnectionRef[S, E : SQL.ErrorContext] protected
             rollback(Some(spr)).
               fold(ex1 => ex combine ex1, _ => ex))).swap
 
-      releaseSavepoint(spr) // won't return any exceptions here
-
-      result
+      releaseSavepoint(spr).recover {
+        case exs@_ => logger.warn(
+          s"""|Ignored error upon releasing database connection savepoint:
+              | ${exs.unwrap.map(_.show).mkString("; ")}""".
+            stripMargin)
+      } flatMap (_ => result)
     }
   }
 
@@ -113,11 +120,25 @@ final class ConnectionRef[S, E : SQL.ErrorContext] protected
     }
 
   def closeOnCompletion[A](a: Result[A]): Result[A] =
-    XorT[ST, NonEmptyList[E], A](a.value.map(xa => { close; xa }))
+    XorT[ST, NonEmptyList[E], A](
+      a.value.flatMap { xa =>
+        val cl =
+          close.recover {
+            case exs@_ => logger.warn(
+              s"""|Ignored error upon closing database connection:
+                  | ${exs.unwrap.map(_.show).mkString("; ")}""".
+                stripMargin)
+          }
+
+        cl.value map (_ => xa)
+      })
 }
 
 object ConnectionRef {
-  def apply[S, A : SQL.ErrorContext](dataSource: DataSource):
+  def apply[S, A](
+    dataSource: DataSource)(
+    implicit EA: SQL.ErrorContext[A],
+    SA: Show[A]):
       SQL.Result[S, A, ConnectionRef[S, A]] =
     XorT.right[State[S, ?], NonEmptyList[A], ConnectionRef[S, A]](
       State.pure(new ConnectionRef[S, A](dataSource)))

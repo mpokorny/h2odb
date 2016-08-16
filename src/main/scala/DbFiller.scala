@@ -239,6 +239,12 @@ object DbFiller {
     def message: String
   }
 
+  object Error {
+    implicit object ShowError extends Show[Error] {
+      override def show(e: Error): String = e.message
+    }
+  }
+
   case class InvalidSheet(sheet: Int) extends Error {
     override def message: String =
       s"Failed to open worksheet $sheet of XLS file"

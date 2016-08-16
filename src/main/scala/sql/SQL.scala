@@ -44,7 +44,7 @@ object SQL {
       es: NonEmptyList[SQLException]): NonEmptyList[A] =
       es map fromSQLException
   }
-  
+
   trait Runnable[A] {
     protected def apply[S]: State[S, A]
 

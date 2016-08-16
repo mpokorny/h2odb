@@ -9,7 +9,7 @@ package org.truffulatree.h2odb.xls
 import java.util.Date
 
 /** XLS file cell value representation
-  * 
+  *
   */
 sealed trait CellValue {
   type A

@@ -326,8 +326,9 @@ object SwingApp extends SimpleSwingApplication {
               listenTo(mouse.clicks)
 
               def showPopupMenu(event: MouseEvent): Unit = {
-                if (selected != null && selected.length > 0)
+                if (selected != null && selected.length > 0) {
                   popupMenu.show(event.source, event.point.x, event.point.y)
+                }
               }
 
               val popupMenu = new PopupMenu {

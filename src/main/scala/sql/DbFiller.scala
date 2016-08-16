@@ -228,7 +228,7 @@ object DbFiller extends Tables {
             FROM #${dbInfo.chemistrySampleInfo}"""
             .as(parser.*)(_))
 
-      pairs(connection).map(_.toMap) 
+      pairs(connection).map(_.toMap)
     }
 
     existingSamples flatMap { es =>
@@ -238,7 +238,7 @@ object DbFiller extends Tables {
   }
 
   implicit object ErrorContext extends SQL.ErrorContext[h2odb.DbFiller.Error] {
-      override def fromSQLException(e: SQLException): h2odb.DbFiller.Error =
-        h2odb.DbFiller.DbError(e)
-    }
+    override def fromSQLException(e: SQLException): h2odb.DbFiller.Error =
+      h2odb.DbFiller.DbError(e)
+  }
 }

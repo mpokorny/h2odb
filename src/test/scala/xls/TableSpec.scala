@@ -8,7 +8,7 @@ package org.truffulatree.h2odb.xls
 
 import cats.data.{OneAnd, StateT, Validated, ValidatedNel}
 import cats.std.option._
-import org.scalatest.{Inside, OptionValues}
+import org.scalatest.{Inside, Inspectors, OptionValues}
 import org.truffulatree.h2odb.UnitSpec
 
 class TableSpec extends UnitSpec with Inside with OptionValues {
@@ -108,7 +108,7 @@ class TableSpec extends UnitSpec with Inside with OptionValues {
 
     val tableRows = toTable(rows)
 
-    forAll (tableRows) { row =>
+    Inspectors.forAll (tableRows) { row =>
       inside(row) { case Validated.Valid(map@_) =>
         map.keySet should contain only ("first", "second", "third", "fourth")
       }

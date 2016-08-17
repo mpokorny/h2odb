@@ -8,9 +8,10 @@ package org.truffulatree.h2odb.xls
 
 import java.util.Date
 
+import org.scalatest.Inspectors
 import org.truffulatree.h2odb.UnitSpec
 
-class CellValueSpec extends UnitSpec {
+class CellValueSpec extends UnitSpec with Inspectors {
   "A CellValue" should "haveTypeOf its own type, exclusively" in {
     val cells = List(
         CellString("hello"),

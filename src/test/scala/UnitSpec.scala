@@ -8,4 +8,4 @@ package org.truffulatree.h2odb
 
 import org.scalatest._
 
-abstract class UnitSpec extends FlatSpec with Matchers with Inspectors
+abstract class UnitSpec extends FlatSpec with Matchers

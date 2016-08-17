@@ -6,9 +6,7 @@
 //
 package org.truffulatree.h2odb.sql
 
-import java.sql.{Connection, SQLException}
-
-import scala.language.higherKinds
+import java.sql.SQLException
 
 import anorm._
 import cats._
@@ -18,13 +16,19 @@ import cats.syntax.all._
 import org.truffulatree.h2odb
 
 class DbFiller[S](
+  val connection: ConnectionRef[S, h2odb.DbFiller.Error],
   override protected val existingSamples: Set[(String, String)],
   guids: Map[String, String])(
-  implicit val connection: ConnectionRef[S, h2odb.DbFiller.Error],
-  errorContext: SQL.ErrorContext[h2odb.DbFiller.Error])
+  implicit errorContext: SQL.ErrorContext[h2odb.DbFiller.Error])
     extends h2odb.DbFiller[DbRecord, State[S, ?]] with Tables {
 
-  import h2odb.DbFiller._
+  import DbFiller._
+
+  import h2odb.DbFiller.{
+    Error,
+    InvalidSamplePointId,
+    MissingLowerLimit,
+    ReportedNDFormat}
 
   /** Convert xls records to database table format
     *
@@ -92,7 +96,7 @@ class DbFiller[S](
     }
   }
 
-  override def addToDb(records: Seq[DbRecord]): DbFiller.Result[S, Seq[DbRecord]] = {
+  override def addToDb(records: Seq[DbRecord]): Result[S, Seq[DbRecord]] = {
     val inserts =
       records.groupBy(_.table).toList map { case (table, recs) =>
 
@@ -109,7 +113,7 @@ class DbFiller[S](
 
   private[this] def addToTable(
     table: String,
-    records: Seq[Seq[NamedParameter]]): DbFiller.Result[S, Unit] = {
+    records: Seq[Seq[NamedParameter]]): Result[S, Unit] = {
     val insert = s"""
         INSERT INTO $table (
           ${dbInfo.analysesAgency},
@@ -168,10 +172,10 @@ object DbFiller extends Tables {
 
   type Result[S, A] = SQL.Result[S, Error, A]
 
-  /** Create a [[DbFiller]] instance with the provided [[java.sql.Connection]].
+  /** Create a [[DbFiller]] instance with the provided [[ConnectionRef]].
     *
     * This method attempts to query several tables in the database, and returns
-    * an error as soon as any of those queries fails.
+    * an error if any of those queries fails.
     */
   def apply[S](connection: ConnectionRef[S, Error])(
     implicit errorContext: SQL.ErrorContext[Error]): Result[S, DbFiller[S]] = {
@@ -232,8 +236,7 @@ object DbFiller extends Tables {
     }
 
     existingSamples flatMap { es =>
-      guids map (gs =>
-        new DbFiller(es, gs)(connection, errorContext))
+      guids map (gs => new DbFiller(connection, es, gs))
     }
   }
 

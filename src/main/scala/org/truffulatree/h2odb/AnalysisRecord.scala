@@ -25,7 +25,7 @@ final case class AnalysisRecord(
   total: Option[String],
   units: String,
   sampleNumber: String,
-  analysisTime: Date)
+  analysisTime: Option[Date])
 
 object AnalysisRecord {
   def fromXlsRow(row: Map[String, CellValue]):
@@ -77,7 +77,7 @@ object AnalysisRecord {
     val vTotal = stringValue("Total")
     val vUnits = requiredStringValue("Results_Units")
     val vSampleNumber = requiredStringValue("SampleNumber")
-    val vAnalysisTime = required[Date](fieldValue)("AnalysisTime") {
+    val vAnalysisTime = fieldValue[Date]("AnalysisTime") {
         case CellDate(d@_) => d
       }
 

@@ -72,11 +72,7 @@ object AnalysisRecord {
     val vDilution = required[Float](fieldValue)("Dilution") {
         case CellNumeric(n@_) => n.toFloat
       }
-    val vMethod = requiredStringValue("Method")
-    val vTotal = stringValue("Total")
-    val vUnits = requiredStringValue("Results_Units")
-    val vSampleNumber = requiredStringValue("SampleNumber")
-    val vAnalysisTime = fieldValue[Date]("AnalysisTime") {
+    val vAnalysisTime = fieldValue("AnalysisTime") {
         case CellDate(d@_) => d
       }
 

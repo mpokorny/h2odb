@@ -10,7 +10,7 @@ import org.truffulatree.h2odb
 
 final case class DbRecord(
   analysesAgency: String,
-  analysisDate: java.util.Date,
+  analysisDate: Option[java.util.Date],
   analysisMethod: String,
   analyte: String,
   labId: String,
@@ -26,7 +26,7 @@ final case class DbRecord(
       case dbInfo.analysesAgency =>
         Some(analysesAgency)
       case dbInfo.analysisDate =>
-        Some(analysisDate)
+        analysisDate
       case dbInfo.analysisMethod =>
         Some(analysisMethod)
       case dbInfo.analyte =>

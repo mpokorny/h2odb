@@ -27,7 +27,7 @@ final case class AnalysisRecord(
   total: Option[String],
   units: String,
   sampleNumber: String,
-  analysisTime: Date)
+  analysisTime: Option[Date])
 
 object AnalysisRecord {
 
@@ -72,7 +72,11 @@ object AnalysisRecord {
     val vDilution = required[Float](fieldValue)("Dilution") {
         case CellNumeric(n@_) => n.toFloat
       }
-    val vAnalysisTime = required[Date](fieldValue)("AnalysisTime") {
+    val vMethod = requiredStringValue("Method")
+    val vTotal = stringValue("Total")
+    val vUnits = requiredStringValue("Results_Units")
+    val vSampleNumber = requiredStringValue("SampleNumber")
+    val vAnalysisTime = fieldValue[Date]("AnalysisTime") {
         case CellDate(d@_) => d
       }
 

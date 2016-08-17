@@ -28,6 +28,7 @@ libraryDependencies ++= Seq(
     "org.apache.poi" % "poi" % "3.14",
     "org.scala-lang.modules" %% "scala-swing" % "2.0.0-M2",
     "org.typelevel" %% "cats" % "0.6.0",
+    "org.scalacheck" %% "scalacheck" % "1.13.1" % "test",
     "org.scalatest" %% "scalatest" % "3.0.0" % "test")
 
 resolvers ++= Seq(

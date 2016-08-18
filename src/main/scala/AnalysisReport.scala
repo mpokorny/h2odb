@@ -97,15 +97,15 @@ object AnalysisReport {
     */
   final case class CellType(column: Int, expectedType: String) extends Error
 
-  /** AnalysisReport.MissingField error analog
+  /** AnalysisRecord.MissingField error analog
     *
-    * @see [[AnalysisReport.MissingField]]
+    * @see [[AnalysisRecord.MissingField]]
     */
   final case class MissingField(name: String) extends Error
 
-  /** AnalysisReport.FieldType error analog
+  /** AnalysisRecord.FieldType error analog
     *
-    * @see [[AnalysisReport.FieldType]]
+    * @see [[AnalysisRecord.FieldType]]
     */
   final case class FieldType(name: String) extends Error
 

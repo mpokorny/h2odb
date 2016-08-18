@@ -12,7 +12,7 @@ import javax.sql.DataSource
 import scala.concurrent.duration.Duration
 
 import cats.Show
-import cats.data.{NonEmptyList, State, Xor, XorT}
+import cats.data.{NonEmptyList, State, XorT}
 import cats.std.list._
 import cats.syntax.all._
 import play.api.Logger

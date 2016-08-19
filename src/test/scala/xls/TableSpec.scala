@@ -6,8 +6,6 @@
 //
 package org.truffulatree.h2odb.xls
 
-import java.util.Date
-
 import cats.data.{OneAnd, StateT, Validated, ValidatedNel}
 import cats.std.list._
 import cats.std.option._
@@ -22,7 +20,8 @@ class TableSpec
     with Inspectors
     with Inside
     with OptionValues
-    with GeneratorDrivenPropertyChecks {
+    with GeneratorDrivenPropertyChecks
+    with CellValueGenerators {
 
   implicit val rowSeqSource = RowSeq.source
 
@@ -128,20 +127,7 @@ class TableSpec
 
   }
 
-  it should "identify location of all cell value column-datatype errors" in {
-    import Arbitrary.arbitrary
-
-    val genString = for { s <- arbitrary[String] } yield CellString(s)
-
-    val genNumeric = for { d <- arbitrary[Double] } yield CellNumeric(d)
-
-    val genDate = for { d <- arbitrary[Date] } yield CellDate(d)
-
-    val genBoolean = for { b <- arbitrary[Boolean] } yield CellBoolean(b)
-
-    val genBlank = Gen.const(CellBlank)
-
-    val genFormula = for { f <- arbitrary[String] } yield CellFormula(f)
+  it should "identify location and expected type of all cell value column-datatype errors" in {
 
     val genCellType =
       Gen.oneOf(genString, genNumeric, genDate, genBoolean, genBlank, genFormula)

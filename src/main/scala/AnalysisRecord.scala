@@ -31,6 +31,28 @@ final case class AnalysisRecord(
 
 object AnalysisRecord {
 
+  val parameterFieldName = "Param"
+
+  val testFieldName = "Test"
+
+  val samplePointIdFieldName = "SamplePointID"
+
+  val reportedNDFieldName = "ReportedND"
+
+  val lowerLimitFieldName = "LowerLimit"
+
+  val dilutionFieldName = "Dilution"
+
+  val methodFieldName = "Method"
+
+  val totalFieldName = "Total"
+
+  val unitsFieldName = "Results_Units"
+
+  val sampleNumberFieldName = "SampleNumber"
+
+  val analysisTimeFieldName = "AnalysisTime"
+
   /** Convert a row from a water analysis report into an [[AnalysisRecord]]
     *
     * The only validation is to check for the existence of required field
@@ -66,27 +88,27 @@ object AnalysisRecord {
     def requiredStringValue(name: String): ValidatedNel[Error, String] =
       required(fieldValue[String])(name) { case CellString(s@_) => s }
 
-    val vLowerLimit = fieldValue("LowerLimit") {
+    val vLowerLimit = fieldValue(lowerLimitFieldName) {
         case CellNumeric(n@_) => n.toFloat
       }
-    val vDilution = required[Float](fieldValue)("Dilution") {
+    val vDilution = required[Float](fieldValue)(dilutionFieldName) {
         case CellNumeric(n@_) => n.toFloat
       }
-    val vAnalysisTime = fieldValue("AnalysisTime") {
+    val vAnalysisTime = fieldValue(analysisTimeFieldName) {
         case CellDate(d@_) => d
       }
 
     Apply[ValidatedNel[Error, ?]].map11(
-      requiredStringValue("Param"),
-      requiredStringValue("Test"),
-      requiredStringValue("SamplePointID"),
-      requiredStringValue("ReportedND"),
+      requiredStringValue(parameterFieldName),
+      requiredStringValue(testFieldName),
+      requiredStringValue(samplePointIdFieldName),
+      requiredStringValue(reportedNDFieldName),
       vLowerLimit,
       vDilution,
-      requiredStringValue("Method"),
-      stringValue("Total"),
-      requiredStringValue("Results_Units"),
-      requiredStringValue("SampleNumber"),
+      requiredStringValue(methodFieldName),
+      stringValue(totalFieldName),
+      requiredStringValue(unitsFieldName),
+      requiredStringValue(sampleNumberFieldName),
       vAnalysisTime) {
       case (param@_, test@_, spid@_, rnd@_, ll@_, dil@_, mth@_, tot@_, un@_, num@_, at@_) =>
         AnalysisRecord(param, test, spid, rnd, ll, dil, mth, tot, un, num, at)

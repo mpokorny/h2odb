@@ -132,7 +132,7 @@ object AnalysisReport {
     val alkalinity      = "Alkalinity as CaCO3"
     val aluminum        = "Aluminum"
     val anions          = "Anions total"
-    val antimony        = "Antimony 121"
+    val antimony        = "Antimony 123"
     val arsenic         = "Arsenic"
     val barium          = "Barium"
     val beryllium       = "Beryllium"
